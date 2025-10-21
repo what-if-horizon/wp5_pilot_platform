@@ -1,0 +1,35 @@
+[project]
+name = "WP5-prototype-backend"
+version = "0.1.0"
+description = "Backend for WhatsApp Community chatroom experiment"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi", # FastAPI framework
+    "uvicorn[standard]", # ASGI server to run FastAPI
+    "google-genai", # Google Gemini API client (NEW SDK)
+    "python-dotenv", # to load GEMINI_API_KEY from .env
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest", # Testing framework
+    "black", # Code formatter 
+    "ruff", # Linter 
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["models*", "simulation*", "utils*"]
+exclude = ["config*", "logs*"]
+
+[tool.black]
+line-length = 100 #max chars per line 
+target-version = ['py312'] # use syntax compatible with Python 3.12
+
+[tool.ruff]
+line-length = 100 # max chars per line
+select = ["E", "F", "I"] # select error, formatting, and import rules
+ignore = [] # no ignored rules

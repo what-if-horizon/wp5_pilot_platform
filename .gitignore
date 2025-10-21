@@ -1,0 +1,177 @@
+# ============================================
+# Python / Backend
+# ============================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Environment variables (contains API keys!)
+backend/.env
+.env
+
+# Logs (keep directory structure, ignore content)
+backend/logs/*.json
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# ============================================
+# Node / Frontend
+# ============================================
+
+# Dependencies
+frontend/node_modules/
+node_modules/
+/.pnp
+.pnp.js
+
+# Next.js
+frontend/.next/
+frontend/out/
+.next/
+out/
+
+# Production builds
+frontend/build/
+
+# Environment variables
+frontend/.env*.local
+.env*.local
+
+# TypeScript
+*.tsbuildinfo
+frontend/next-env.d.ts
+next-env.d.ts
+
+# Testing
+frontend/coverage/
+coverage/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Vercel
+.vercel
+
+# ============================================
+# IDE / Editors
+# ============================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ============================================
+# Operating System
+# ============================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ============================================
+# Misc
+# ============================================
+
+# Certificates / Keys (extra safety)
+*.pem
+*.key
+*.cert
+*.crt
+
+# Compressed files
+*.zip
+*.tar.gz
+*.rar
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
