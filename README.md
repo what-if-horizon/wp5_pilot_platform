@@ -1,6 +1,6 @@
-# WP5 WhatsApp Community Chatroom Experiment
+# WP5 WhatsApp Community Chatroom Prototype
 
-Prototype platform for incivility in simulated chatrooms.
+Platform for incivility in simulated chatrooms.
 
 **Status**: backend development; minimal frontend for testing. 
 
