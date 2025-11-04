@@ -1,3 +1,3 @@
-from simulation.session import SimulationSession
+from simulation.chatroom import SimulationSession
 
 __all__ = ["SimulationSession"]

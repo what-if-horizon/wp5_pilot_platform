@@ -10,12 +10,12 @@ load_dotenv()
 class GeminiClient:
     """Client for interacting with Google Gemini API."""
     
-    def __init__(self, model_name: str = "gemini-2.0-flash-exp"):
+    def __init__(self, model_name: str = "gemini-2.0-flash"):
         """
         Initialize Gemini client.
         
         Args:
-            model_name: Gemini model to use (default: gemini-2.0-flash-exp for speed/cost)
+            model_name: Gemini model to use (default: gemini-2.0-flash for speed/cost)
         """
         self.model_name = model_name
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))

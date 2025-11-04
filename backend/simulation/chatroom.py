@@ -20,15 +20,15 @@ class SimulationSession:
             session_id: Unique identifier for this session
             websocket_send: Async function to send messages to the frontend
         """
-        self.session_id = session_id
-        self.websocket_send = websocket_send
-        self.logger = Logger(session_id)
+        self.session_id = session_id #stores session id as attribute
+        self.websocket_send = websocket_send #method to send messages to frontend
+        self.logger = Logger(session_id) #logger instance for this session
         
-        # Load configurations
+        # Load configurations (experimental and simulation)
         self.experimental_config = self._load_config("config/experimental_settings.json")
         self.simulation_config = self._load_config("config/simulation_settings.json")
         
-        # Initialize agents
+        # Initialize agents (from simulation config)
         agent_names = self.simulation_config["agent_names"]
         agents = [Agent(name=name) for name in agent_names]
         

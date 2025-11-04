@@ -17,10 +17,10 @@ backend/
 │   ├── __init__.py
 │   ├── message.py                   # Message dataclass
 │   ├── agent.py                     # Agent dataclass 
-│   └── session_state.py             # SessionState dataclass 
+│   └── session.py             # SessionState dataclass 
 ├── simulation/                      # Core simulation logic
 │   ├── __init__.py
-│   └── session.py                   # SimulationSession class 
+│   └── chatroom.py                   # SimulationSession class 
 ├── utils/                           # Utility functions
 │   ├── __init__.py
 │   ├── llm_gemini.py               # Gemini API client

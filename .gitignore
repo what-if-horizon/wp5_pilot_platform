@@ -111,6 +111,9 @@ lerna-debug.log*
 .vscode/
 *.code-workspace
 
+#Github / Co-Pilot
+.github/copilot-instructions.md
+
 # PyCharm / IntelliJ
 .idea/
 *.iml

@@ -2,39 +2,41 @@ import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict
 import uuid
 
+# Import simulation session business logic
 from simulation import SimulationSession
 
-
+# FastAPI app initialization
 app = FastAPI(title="WP5 Chatroom Backend")
 
-# CORS middleware for frontend communication
+# CORS middleware for (safe) frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://localhost:3000"], # Next.js local dev; change later...
+    allow_credentials=False, # We do NOT yet need cookies (maybe later...)
+    allow_methods=["GET", "POST", "OPTIONS"], # Permitted HTTP methods...
+    allow_headers=["Authorization", "Content-Type"], # Permitted HTTP headers...
 )
 
-# Global session storage (for MVP: single session at a time)
+# Global session storage (MVP: single session at a time)
 active_session: Optional[SimulationSession] = None
 active_websocket: Optional[WebSocket] = None
 
 
+#NOTE: Pydantic for validation at HTTP boundary (later: websockets also???)
 class SessionStartRequest(BaseModel):
     """Request model for starting a session."""
-    token: str
-
+    token: str #expects '1234'; later: [UID + Tx] token. 
 
 class SessionStartResponse(BaseModel):
     """Response model for session start."""
-    session_id: str
-    message: str
+    session_id: str #from uuid 
+    message: str #confirmation message
 
 
+#ENDPOINT 1 for starting a new session - 
 @app.post("/session/start", response_model=SessionStartResponse)
 async def start_session(request: SessionStartRequest):
     """
@@ -54,13 +56,15 @@ async def start_session(request: SessionStartRequest):
     
     # Generate session ID
     session_id = str(uuid.uuid4())
-    
+
+    # Return session id and confirmation message
     return SessionStartResponse(
         session_id=session_id,
         message="Session created. Connect via WebSocket to start."
     )
 
 
+#ENDPOINT 2 for websocket connection - chat communication
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """
@@ -109,14 +113,16 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             await active_session.stop(reason="error")
         active_session = None
         active_websocket = None
+        
 
-
+#ENDPOINT 3: Health check (used by )
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
 
 
+#ROOT ENDPOINT: API docstring
 @app.get("/")
 async def root():
     """Root endpoint with API info."""
@@ -130,7 +136,7 @@ async def root():
         }
     }
 
-
+# Run with: uvicorn backend.main:app --reload on port 8000
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
