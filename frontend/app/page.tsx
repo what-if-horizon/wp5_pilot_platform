@@ -29,32 +29,50 @@ export default function ChatPage() {
   // WebSocket connection
   useEffect(() => {
     if (!sessionId) return
+    let mounted = true
+    let reconnectAttempts = 0
+    let reconnectTimer: number | null = null
 
-    const ws = new WebSocket(`ws://localhost:8000/ws/${sessionId}`)
-    wsRef.current = ws
+    const connect = () => {
+      if (!mounted) return
+      const ws = new WebSocket(`ws://localhost:8000/ws/${sessionId}`)
+      wsRef.current = ws
 
-    ws.onopen = () => {
-      console.log('WebSocket connected')
-      setIsConnected(true)
+      ws.onopen = () => {
+        console.log('WebSocket connected')
+        setIsConnected(true)
+        reconnectAttempts = 0
+      }
+
+      ws.onmessage = (event) => {
+        const message: Message = JSON.parse(event.data)
+        setMessages((prev) => [...prev, message])
+      }
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected')
+        setIsConnected(false)
+        // Simple reconnect logic: try a few times with delay
+        if (reconnectAttempts < 5) {
+          reconnectAttempts += 1
+          reconnectTimer = window.setTimeout(() => {
+            connect()
+          }, 2000 * reconnectAttempts)
+        }
+      }
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error)
+      }
     }
 
-    ws.onmessage = (event) => {
-      const message: Message = JSON.parse(event.data)
-      setMessages((prev) => [...prev, message])
-    }
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected')
-      setIsConnected(false)
-    }
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
-    }
+    connect()
 
     // Cleanup on unmount
     return () => {
-      ws.close()
+      mounted = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (wsRef.current) wsRef.current.close()
     }
   }, [sessionId])
 
@@ -74,11 +92,27 @@ export default function ChatPage() {
 
       const data = await response.json()
       setSessionId(data.session_id)
+      // persist session id so reloads reconnect automatically
+      try {
+        localStorage.setItem('wp5_session_id', data.session_id)
+      } catch (e) {
+        // ignore localStorage errors
+      }
     } catch (error) {
       console.error('Error starting session:', error)
       alert('Failed to start session')
     }
   }
+
+  // On mount, restore session_id from localStorage to persist across reloads
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('wp5_session_id')
+      if (saved) setSessionId(saved)
+    } catch (e) {
+      // ignore
+    }
+  }, [])
 
   // Send message
   const handleSendMessage = () => {

@@ -18,10 +18,12 @@ class SimulationSession:
         
         Args:
             session_id: Unique identifier for this session
-            websocket_send: Async function to send messages to the frontend
+            websocket_send: Optional async function to send messages to the frontend
         """
         self.session_id = session_id #stores session id as attribute
-        self.websocket_send = websocket_send #method to send messages to frontend
+        # websocket_send is an async callable used to send messages to the frontend.
+        # It may be detached when the client disconnects; use a no-op in that case.
+        self.websocket_send = websocket_send or self._noop_send
         self.logger = Logger(session_id) #logger instance for this session
         
         # Load configurations (experimental and simulation)
@@ -142,19 +144,19 @@ class SimulationSession:
     async def _generate_agent_message(self, context_type: str) -> None:
         """
         Generate and send an agent message.
-        
+
         Args:
             context_type: Either 'background' or 'user_response'
         """
         # Select random agent
         agent = random.choice(self.state.agents)
-        
+
         # Build prompt
         prompt = self._build_prompt(agent)
-        
+
         # Call LLM (with retry)
         response_text = gemini_client.generate_response(prompt, max_retries=1)
-        
+
         # Log LLM call
         self.logger.log_llm_call(
             agent_name=agent.name,
@@ -162,20 +164,46 @@ class SimulationSession:
             response=response_text,
             error=None if response_text else "Failed after retries"
         )
-        
+
         # If LLM failed, skip this turn
         if not response_text:
             return
-        
+
         # Create message
         message = Message.create(sender=agent.name, content=response_text)
         self.state.add_message(message)
-        
+
         # Log message
         self.logger.log_message(message.to_dict())
-        
-        # Send to frontend via WebSocket
-        await self.websocket_send(message.to_dict())
+
+        # Send to frontend via WebSocket (websocket_send may be a no-op)
+        try:
+            await self.websocket_send(message.to_dict())
+        except Exception as e:
+            self.logger.log_error("send", str(e))
+
+    async def _noop_send(self, message: dict) -> None:
+        """Default no-op sender used when no websocket is attached."""
+        return
+
+    async def attach_websocket(self, websocket_send: Callable) -> None:
+        """Attach a websocket send function and replay recent messages to the newly connected client.
+
+        This is used for reconnects after client reloads. It sets the session's websocket_send to the
+        provided callable and replays the current message history.
+        """
+        self.websocket_send = websocket_send
+        # replay history to new client (send all messages recorded so far)
+        for m in self.state.messages:
+            try:
+                await self.websocket_send(m.to_dict())
+            except Exception:
+                # ignore individual send errors during replay
+                continue
+
+    def detach_websocket(self) -> None:
+        """Detach the current websocket sender and replace with a no-op. Keeps session running."""
+        self.websocket_send = self._noop_send
     
     def _build_prompt(self, agent: Agent) -> str:
         """

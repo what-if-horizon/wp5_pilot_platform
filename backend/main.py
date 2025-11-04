@@ -25,8 +25,8 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"], # Permitted HTTP headers...
 )
 
-# Global session storage (MVP: single session at a time)
-active_session: Optional[SimulationSession] = None
+# Session storage: map session_id -> SimulationSession
+sessions: Dict[str, SimulationSession] = {}
 active_websocket: Optional[WebSocket] = None
 
 # Pending sessions created via POST /session/start but waiting for websocket connection.
@@ -73,10 +73,6 @@ async def start_session(request: SessionStartRequest):
         # Either invalid or already used
         raise HTTPException(status_code=401, detail="Invalid or already-used token")
 
-    # Check if session already active
-    if active_session and active_session.running:
-        raise HTTPException(status_code=409, detail="Session already active")
-
     # Generate session ID and reserve pending session with treatment group
     session_id = str(uuid.uuid4())
     pending_sessions[session_id] = {"treatment_group": group}
@@ -106,42 +102,52 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     
     await websocket.accept()
     active_websocket = websocket
-    
-    # Create and start simulation session
+
+    # Create a send helper which uses the currently-accepted websocket
     async def send_to_frontend(message_dict: dict):
         """Helper to send messages to frontend via WebSocket."""
         if active_websocket:
             await active_websocket.send_json(message_dict)
+
     # Check for pending session info (treatment group) saved at /session/start
     pending = pending_sessions.pop(session_id, {})
     treatment_group = pending.get("treatment_group")
 
-    active_session = SimulationSession(session_id=session_id, websocket_send=send_to_frontend, treatment_group=treatment_group)
-    await active_session.start()
+    # If a session already exists with this id, attach to it. Otherwise create a new one.
+    session = sessions.get(session_id)
+    if session:
+        # attach websocket and replay history
+        await session.attach_websocket(send_to_frontend)
+        active_session = session
+    else:
+        session = SimulationSession(session_id=session_id, websocket_send=send_to_frontend, treatment_group=treatment_group)
+        sessions[session_id] = session
+        active_session = session
+        await session.start()
     
     try:
         while True:
             # Receive message from frontend
             data = await websocket.receive_json()
-            
+
             # Expected format: {"type": "user_message", "content": "..."}
             if data.get("type") == "user_message":
                 content = data.get("content", "").strip()
                 if content:
-                    await active_session.handle_user_message(content)
-            
+                    await session.handle_user_message(content)
+
     except WebSocketDisconnect:
         print(f"WebSocket disconnected for session {session_id}")
-        if active_session:
-            await active_session.stop(reason="websocket_disconnect")
-        active_session = None
+        # Detach websocket but keep session running so client can reconnect
+        if session:
+            session.detach_websocket()
         active_websocket = None
-    
+
     except Exception as e:
         print(f"WebSocket error: {e}")
-        if active_session:
-            await active_session.stop(reason="error")
-        active_session = None
+        # On unexpected errors, detach websocket and leave session to be inspected
+        if session:
+            session.detach_websocket()
         active_websocket = None
         
 
