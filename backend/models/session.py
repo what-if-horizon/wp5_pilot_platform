@@ -17,6 +17,7 @@ class SessionState:
     pending_user_response: bool = False
     experimental_config: dict = field(default_factory=dict)
     simulation_config: dict = field(default_factory=dict)
+    treatment_group: str = None
     
     def add_message(self, message: Message) -> None:
         """Add a message to the session history."""

@@ -4,9 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict
 import uuid
+import json
+from pathlib import Path
 
 # Import simulation session business logic
 from simulation import SimulationSession
+
+# Participant tokens helper
+from utils import participant_tokens
 
 # FastAPI app initialization
 app = FastAPI(title="WP5 Chatroom Backend")
@@ -23,6 +28,22 @@ app.add_middleware(
 # Global session storage (MVP: single session at a time)
 active_session: Optional[SimulationSession] = None
 active_websocket: Optional[WebSocket] = None
+
+# Pending sessions created via POST /session/start but waiting for websocket connection.
+# Maps session_id -> dict with keys like 'treatment_group'
+pending_sessions: Dict[str, Dict] = {}
+
+
+# Startup validation: ensure participant tokens reference existing experimental groups
+try:
+    exp_path = Path(__file__).resolve().parent / "config" / "experimental_settings.json"
+    with open(exp_path, "r") as f:
+        experimental_settings = json.load(f)
+    participant_tokens.validate_against_experiments(experimental_settings)
+    print("Participant tokens validated against experimental settings.")
+except Exception as e:
+    print(f"Startup validation error: {e}")
+    raise
 
 
 #NOTE: Pydantic for validation at HTTP boundary (later: websockets also???)
@@ -46,21 +67,27 @@ async def start_session(request: SessionStartRequest):
     """
     global active_session
     
-    # Check token
-    if request.token != "1234":
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
+    # Validate and consume participant token (single-use)
+    group = participant_tokens.find_group_for_token(request.token)
+    if not group:
+        # Either invalid or already used
+        raise HTTPException(status_code=401, detail="Invalid or already-used token")
+
     # Check if session already active
     if active_session and active_session.running:
         raise HTTPException(status_code=409, detail="Session already active")
-    
-    # Generate session ID
+
+    # Generate session ID and reserve pending session with treatment group
     session_id = str(uuid.uuid4())
+    pending_sessions[session_id] = {"treatment_group": group}
+
+    # Mark token as used (logged to logs/used_tokens.jsonl)
+    participant_tokens.mark_token_used(request.token, session_id, group)
 
     # Return session id and confirmation message
     return SessionStartResponse(
         session_id=session_id,
-        message="Session created. Connect via WebSocket to start."
+        message=f"Session created with treatment group {group}. Connect via WebSocket to start."
     )
 
 
@@ -85,8 +112,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         """Helper to send messages to frontend via WebSocket."""
         if active_websocket:
             await active_websocket.send_json(message_dict)
-    
-    active_session = SimulationSession(session_id=session_id, websocket_send=send_to_frontend)
+    # Check for pending session info (treatment group) saved at /session/start
+    pending = pending_sessions.pop(session_id, {})
+    treatment_group = pending.get("treatment_group")
+
+    active_session = SimulationSession(session_id=session_id, websocket_send=send_to_frontend, treatment_group=treatment_group)
     await active_session.start()
     
     try:

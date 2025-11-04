@@ -12,7 +12,7 @@ from utils import Logger, gemini_client
 class SimulationSession:
     """Core simulation logic for a chatroom session."""
     
-    def __init__(self, session_id: str, websocket_send: Callable):
+    def __init__(self, session_id: str, websocket_send: Callable, treatment_group: Optional[str] = None):
         """
         Initialize a simulation session.
         
@@ -25,7 +25,20 @@ class SimulationSession:
         self.logger = Logger(session_id) #logger instance for this session
         
         # Load configurations (experimental and simulation)
-        self.experimental_config = self._load_config("config/experimental_settings.json")
+        self.experimental_settings_full = self._load_config("config/experimental_settings.json")
+        # experimental_settings may be either a dict with 'groups' mapping, or a flat config.
+        if treatment_group and isinstance(self.experimental_settings_full, dict) and "groups" in self.experimental_settings_full:
+            group_map = self.experimental_settings_full.get("groups", {})
+            self.experimental_config = group_map.get(treatment_group, {})
+        else:
+            # fallback: if file is flat (old style) or no group provided, use top-level
+            # If file contains 'groups' but no treatment_group provided, pick the first group
+            if isinstance(self.experimental_settings_full, dict) and "groups" in self.experimental_settings_full:
+                # pick the first group if treatment_group not provided
+                first_group = next(iter(self.experimental_settings_full["groups"].keys()))
+                self.experimental_config = self.experimental_settings_full["groups"][first_group]
+            else:
+                self.experimental_config = self.experimental_settings_full
         self.simulation_config = self._load_config("config/simulation_settings.json")
         
         # Initialize agents (from simulation config)
@@ -38,6 +51,7 @@ class SimulationSession:
             agents=agents,
             duration_minutes=self.simulation_config["session_duration_minutes"],
             experimental_config=self.experimental_config,
+            treatment_group=treatment_group,
             simulation_config=self.simulation_config
         )
         
