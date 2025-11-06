@@ -1,0 +1,17 @@
+# simulation_settings.toml
+# Simulation configuration values used by SimulationSession.
+# - num_agents: total agents in the session (if you supply explicit agent_names this is informational)
+# - agent_names: list of agent names to instantiate
+# - messages_per_minute: expected background message rate (used to compute per-second probability)
+# - user_response_probability: probability an agent responds when a user message is posted
+# - context_window_size: how many recent messages to include in prompts
+# - session_duration_minutes: total session lifetime before expiry
+# - llm_concurrency_limit: per-process limit of concurrent LLM requests (must be a positive integer > 0)
+
+num_agents = 3
+agent_names = ["Alice", "Bob", "Charlie"]
+messages_per_minute = 5
+user_response_probability = 1
+context_window_size = 10
+session_duration_minutes = 5
+llm_concurrency_limit = 5

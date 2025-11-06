@@ -24,6 +24,7 @@ class Logger:
         event = {
             "timestamp": datetime.now().isoformat(),
             "event_type": event_type,
+            "session_id": self.session_id,
             "data": data
         }
         
@@ -31,10 +32,11 @@ class Logger:
         with open(self.log_file, "a") as f:
             f.write(json.dumps(event) + "\n")
     
-    def log_session_start(self, experimental_config: dict, simulation_config: dict) -> None:
-        """Log session initialization with config snapshots."""
+    def log_session_start(self, experimental_config: dict, simulation_config: dict, treatment_group: str) -> None:
+        """Log session initialization with config snapshots and assigned treatment group."""
         self.log_event("session_start", {
             "session_id": self.session_id,
+            "treatment_group": treatment_group,
             "experimental_config": experimental_config,
             "simulation_config": simulation_config
         })

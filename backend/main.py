@@ -5,18 +5,28 @@ from pydantic import BaseModel
 from typing import Optional, Dict
 import uuid
 import json
+
+#check that tomllib is available (for parsing configs)
+try:
+    import tomllib  # Python 3.11+ stdlib   
+except Exception:
+    raise RuntimeError("TOML support required (Python 3.11+). Please run with Python >=3.11")
 from pathlib import Path
 
-# Import simulation session business logic
+# Import simulation logic (i.e., platform)
+#NOTE: for pilot we only have one simulation type (chatroom)
 from simulation import SimulationSession
+# Import concurrent session manager: 
+from utils.session_manager import session_manager
+# Import login token manager and llm client
+from utils import token_manager, gemini_client
 
-# Participant tokens helper
-from utils import participant_tokens
 
-# FastAPI app initialization
-app = FastAPI(title="WP5 Chatroom Backend")
+# Initialize FastAPI app - 
+app = FastAPI(title="Simulcra: Prototype Backend")
 
-# CORS middleware for (safe) frontend communication
+# CORS middleware for safe cross-origin requests)
+# NOTE: minimal settings for local dev (change later)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"], # Next.js local dev; change later...
@@ -25,60 +35,64 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"], # Permitted HTTP headers...
 )
 
-# Session storage: map session_id -> SimulationSession
-sessions: Dict[str, SimulationSession] = {}
+# Set sentinel state for websocket: 
 active_websocket: Optional[WebSocket] = None
 
-# Pending sessions created via POST /session/start but waiting for websocket connection.
-# Maps session_id -> dict with keys like 'treatment_group'
-pending_sessions: Dict[str, Dict] = {}
 
-
-# Startup validation: ensure participant tokens reference existing experimental groups
+# Startup validation: check that participant tokens reference existing experimental groups
+#NOTE: researcher pre-configures these in /config/experimental_settings.toml and /config/participant_tokens.toml
 try:
-    exp_path = Path(__file__).resolve().parent / "config" / "experimental_settings.json"
-    with open(exp_path, "r") as f:
-        experimental_settings = json.load(f)
-    participant_tokens.validate_against_experiments(experimental_settings)
+    base = Path(__file__).resolve().parent
+    exp_toml = base / "config" / "experimental_settings.toml"
+
+    if not exp_toml.exists():
+        raise FileNotFoundError("No experimental_settings.toml found in backend/config; please create one.")
+
+    # tomllib requires binary mode
+    with open(exp_toml, "rb") as f:
+        experimental_settings = tomllib.load(f)
+
+    token_manager.validate_against_experiments(experimental_settings)
     print("Participant tokens validated against experimental settings.")
 except Exception as e:
     print(f"Startup validation error: {e}")
     raise
 
 
-#NOTE: Pydantic for validation at HTTP boundary (later: websockets also???)
+# Pydantic for validation at HTTP boundary
+#NOTE: this guards against malformed requests/responses
 class SessionStartRequest(BaseModel):
     """Request model for starting a session."""
-    token: str #expects '1234'; later: [UID + Tx] token. 
+    token: str  # single-use participant token (validated against config/participant_tokens.toml)
 
 class SessionStartResponse(BaseModel):
     """Response model for session start."""
     session_id: str #from uuid 
-    message: str #confirmation message
+    message: str #confirmation message (e.g. treatment group info)
 
 
 #ENDPOINT 1 for starting a new session - 
+#NOTE: at this point we begin asynchronous session management (multiple user-sessions)
 @app.post("/session/start", response_model=SessionStartResponse)
 async def start_session(request: SessionStartRequest):
     """
     Start a new simulation session.
     
-    Requires authentication token (currently hardcoded as '1234').
+    Requires a valid single-use participant token. Tokens are validated and
+    consumed using `utils.token_manager` against `backend/config/participant_tokens.toml`.
     """
     global active_session
     
-    # Validate and consume participant token (single-use)
-    group = participant_tokens.find_group_for_token(request.token)
+    # Generate session ID up-front and atomically consume the participant token
+    # using the same session_id so logs reference the same session identifier.
+    session_id = str(uuid.uuid4())
+    group = token_manager.consume_token(request.token, session_id=session_id)
     if not group:
         # Either invalid or already used
         raise HTTPException(status_code=401, detail="Invalid or already-used token")
 
-    # Generate session ID and reserve pending session with treatment group
-    session_id = str(uuid.uuid4())
-    pending_sessions[session_id] = {"treatment_group": group}
-
-    # Mark token as used (logged to logs/used_tokens.jsonl)
-    participant_tokens.mark_token_used(request.token, session_id, group)
+    # Reserve pending session with treatment group
+    await session_manager.reserve_pending(session_id, {"treatment_group": group})
 
     # Return session id and confirmation message
     return SessionStartResponse(
@@ -109,21 +123,27 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         if active_websocket:
             await active_websocket.send_json(message_dict)
 
-    # Check for pending session info (treatment group) saved at /session/start
-    pending = pending_sessions.pop(session_id, {})
-    treatment_group = pending.get("treatment_group")
-
-    # If a session already exists with this id, attach to it. Otherwise create a new one.
-    session = sessions.get(session_id)
+    # First, check if a session already exists for this session_id (reconnect case)
+    session = await session_manager.get_session(session_id)
     if session:
-        # attach websocket and replay history
+        # Attach websocket to existing session and continue
         await session.attach_websocket(send_to_frontend)
         active_session = session
     else:
-        session = SimulationSession(session_id=session_id, websocket_send=send_to_frontend, treatment_group=treatment_group)
-        sessions[session_id] = session
+        # No existing session: check for pending session info (treatment group) saved at /session/start
+        pending = await session_manager.pop_pending(session_id)
+        treatment_group = pending.get("treatment_group")
+
+        # A treatment_group MUST be present for creating a new session (sessions are experimental and require assignment).
+        if not treatment_group:
+            # Close the websocket with policy violation and stop.
+            await websocket.close(code=1008)
+            print(f"WebSocket connection for session {session_id} rejected: missing treatment_group")
+            return
+
+        # Create and start a new session with the reserved treatment_group
+        session = await session_manager.create_session(session_id, send_to_frontend, treatment_group=treatment_group)
         active_session = session
-        await session.start()
     
     try:
         while True:
@@ -136,13 +156,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 if content:
                     await session.handle_user_message(content)
 
+    # Handle clean disconnects
     except WebSocketDisconnect:
         print(f"WebSocket disconnected for session {session_id}")
         # Detach websocket but keep session running so client can reconnect
         if session:
             session.detach_websocket()
         active_websocket = None
-
+    
+    # Handle unexpected errors
     except Exception as e:
         print(f"WebSocket error: {e}")
         # On unexpected errors, detach websocket and leave session to be inspected
@@ -151,7 +173,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         active_websocket = None
         
 
-#ENDPOINT 3: Health check (used by )
+#ENDPOINT 3: Health check
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -176,3 +198,12 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# Cleanup on shutdown (.on_event depricated; fix needed later)
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup resources on shutdown (close async LLM client)."""
+    try:
+        await gemini_client.aclose()
+    except Exception as e:
+        print(f"Error closing gemini client: {e}")

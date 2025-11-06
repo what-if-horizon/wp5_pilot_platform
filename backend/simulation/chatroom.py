@@ -1,20 +1,23 @@
 import asyncio
-import json
 import random
 from pathlib import Path
 from typing import Callable, Optional
 from datetime import datetime
 
 from models import Message, Agent, SessionState
-from utils import Logger, gemini_client
+from utils import Logger
+from utils.config_loader import load_config
+from utils.llm_manager import LLMManager
 
+# CHATROOM SIMULATION LOGIC - 
+# NOTE: this script contains the core SimulationSession class for chatroom simulations.
 
 class SimulationSession:
     """Core simulation logic for a chatroom session."""
-    
-    def __init__(self, session_id: str, websocket_send: Callable, treatment_group: Optional[str] = None):
+    #initialize simulation session with session id, websocket, and treatment group
+    def __init__(self, session_id: str, websocket_send: Callable, treatment_group: str):
         """
-        Initialize a simulation session.
+        Initialize a chatroom simulation session.
         
         Args:
             session_id: Unique identifier for this session
@@ -25,29 +28,27 @@ class SimulationSession:
         # It may be detached when the client disconnects; use a no-op in that case.
         self.websocket_send = websocket_send or self._noop_send
         self.logger = Logger(session_id) #logger instance for this session
-        
-        # Load configurations (experimental and simulation)
-        self.experimental_settings_full = self._load_config("config/experimental_settings.json")
-        # experimental_settings may be either a dict with 'groups' mapping, or a flat config.
-        if treatment_group and isinstance(self.experimental_settings_full, dict) and "groups" in self.experimental_settings_full:
-            group_map = self.experimental_settings_full.get("groups", {})
-            self.experimental_config = group_map.get(treatment_group, {})
-        else:
-            # fallback: if file is flat (old style) or no group provided, use top-level
-            # If file contains 'groups' but no treatment_group provided, pick the first group
-            if isinstance(self.experimental_settings_full, dict) and "groups" in self.experimental_settings_full:
-                # pick the first group if treatment_group not provided
-                first_group = next(iter(self.experimental_settings_full["groups"].keys()))
-                self.experimental_config = self.experimental_settings_full["groups"][first_group]
-            else:
-                self.experimental_config = self.experimental_settings_full
-        self.simulation_config = self._load_config("config/simulation_settings.json")
+        # Load configurations (experimental and simulation) from TOML files
+        self.experimental_settings_full = load_config("config/experimental_settings.toml")
+        if not (isinstance(self.experimental_settings_full, dict) and "groups" in self.experimental_settings_full):
+            raise RuntimeError("experimental_settings.toml must define a top-level 'groups' table mapping treatment names to configs")
+        group_map = self.experimental_settings_full["groups"]
+        # treatment_group is required and must be present in the groups mapping
+        if treatment_group not in group_map: #redundant due to backend startup validation; but safe.
+            raise RuntimeError(f"treatment_group '{treatment_group}' not found in experimental_settings.toml groups")
+        self.experimental_config = group_map[treatment_group] #store full exp. config for this user-session. 
+        self.treatment_group = treatment_group #store treatment group for this user-session.
+        self.simulation_config = load_config("config/simulation_settings.toml") #load sim. config.
+        # Configure an LLM manager from the simulation settings. The manager
+        # encapsulates concurrency limits and delegates to the chosen LLM client.
+        self.llm_manager = LLMManager.from_simulation_config(self.simulation_config)
         
         # Initialize agents (from simulation config)
+        # NOTE: later create backend/agents/agent_manager.py to handle agent creation and relations.
         agent_names = self.simulation_config["agent_names"]
         agents = [Agent(name=name) for name in agent_names]
         
-        # Initialize session state
+        # Initialize session state (pass session id, agents, configs)
         self.state = SessionState(
             session_id=session_id,
             agents=agents,
@@ -57,71 +58,72 @@ class SimulationSession:
             simulation_config=self.simulation_config
         )
         
-        # Clock task handle
+        # Set clock task (but do not start it yet)
         self.clock_task: Optional[asyncio.Task] = None
         self.running = False
     
-    def _load_config(self, path: str) -> dict:
-        """Load a JSON configuration file."""
-        with open(Path(path), "r") as f:
-            return json.load(f)
     
+    # Start the simulation session (main clock loop)
     async def start(self) -> None:
         """Start the simulation session."""
-        self.running = True
-        self.logger.log_session_start(self.experimental_config, self.simulation_config)
-        
-        # Start the clock
+        self.running = True #indicate session is running
+        #log session start
+        self.logger.log_session_start(self.experimental_config, self.simulation_config, self.treatment_group)
+        #simulation clock loop start
         self.clock_task = asyncio.create_task(self._clock_loop())
-        
         print(f"Session {self.session_id} started")
     
+    # Stop the simulation session
     async def stop(self, reason: str = "completed") -> None:
         """Stop the simulation session."""
-        self.running = False
-        
-        # Cancel clock task
+        self.running = False #indicate session has stopped
+        #simulation clock loop stop
         if self.clock_task:
             self.clock_task.cancel()
             try:
                 await self.clock_task
             except asyncio.CancelledError:
                 pass
-        
+        #log reason for session end
         self.logger.log_session_end(reason)
         print(f"Session {self.session_id} stopped: {reason}")
     
+    # Main time-based loop driving the simulation
     async def _clock_loop(self) -> None:
-        """Main clock loop that drives the simulation."""
+        """Main clock loop that drives the chatroom simulation."""
         tick_interval = 1.0  # 1 second per tick
+        #probabilistic background message posting
         mpm = self.simulation_config["messages_per_minute"]
-        post_probability = mpm / 60.0  # Probability per second
+        post_probability = mpm / 60.0  # %prob per second
         
+        #Main event loop logic - 
         while self.running:
             try:
-                # Check if session has expired
+                # Check if session has expired (configs)
                 if self.state.is_expired():
                     await self.stop(reason="duration_expired")
                     break
                 
-                # Handle pending user response
+                # Handle pending user response (if any)
                 if self.state.pending_user_response:
                     await self._generate_agent_message(context_type="user_response")
                     self.state.pending_user_response = False
                 
-                # Probabilistic background message
+                # Probabilistic background message activity
                 elif random.random() < post_probability:
                     await self._generate_agent_message(context_type="background")
                 
                 # Wait for next tick
                 await asyncio.sleep(tick_interval)
-                
+            
+            # Handle cancellation and errors
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 self.logger.log_error("clock_loop", str(e))
                 print(f"Error in clock loop: {e}")
     
+    # handle user messages from frontend
     async def handle_user_message(self, content: str) -> None:
         """
         Handle a message from the user.
@@ -132,15 +134,14 @@ class SimulationSession:
         # Create and store message
         message = Message.create(sender="user", content=content)
         self.state.add_message(message)
-        
         # Log the message
         self.logger.log_message(message.to_dict())
-        
-        # Roll dice for agent response
+        # Roll dice for agent response (configs)
         response_prob = self.simulation_config["user_response_probability"]
         if random.random() < response_prob:
             self.state.pending_user_response = True
     
+    # Generate and send an agent message to frontend
     async def _generate_agent_message(self, context_type: str) -> None:
         """
         Generate and send an agent message.
@@ -148,14 +149,20 @@ class SimulationSession:
         Args:
             context_type: Either 'background' or 'user_response'
         """
-        # Select random agent
+        # Select random agent (for now)
         agent = random.choice(self.state.agents)
 
         # Build prompt
         prompt = self._build_prompt(agent)
 
-        # Call LLM (with retry)
-        response_text = gemini_client.generate_response(prompt, max_retries=1)
+        # Call LLM (with retry) using async client and a semaphore to limit concurrency
+        response_text = None
+        try:
+            # LLMManager handles concurrency and delegating to the chosen LLM client.
+            response_text = await self.llm_manager.generate_response(prompt, max_retries=1)
+        except Exception as e:
+            response_text = None
+            self.logger.log_error("llm_call", str(e))
 
         # Log LLM call
         self.logger.log_llm_call(
@@ -182,10 +189,13 @@ class SimulationSession:
         except Exception as e:
             self.logger.log_error("send", str(e))
 
+    # No-op sender for detached websockets
+    # NOTE: this allows sessions to continue running without an active client. 
     async def _noop_send(self, message: dict) -> None:
         """Default no-op sender used when no websocket is attached."""
         return
 
+    # Attach a websocket send function and replay recent messages to the newly connected client.
     async def attach_websocket(self, websocket_send: Callable) -> None:
         """Attach a websocket send function and replay recent messages to the newly connected client.
 
@@ -205,6 +215,8 @@ class SimulationSession:
         """Detach the current websocket sender and replace with a no-op. Keeps session running."""
         self.websocket_send = self._noop_send
     
+    # Build the prompt for an agent message
+    # NOTE: this is generic; later move to backend/agents/prompt_builder.py
     def _build_prompt(self, agent: Agent) -> str:
         """
         Build the prompt for an agent, including identity and conversation context.

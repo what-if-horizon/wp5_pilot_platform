@@ -1,14 +1,16 @@
-# WP5 WhatsApp Community Chatroom Prototype
+# Simulacra - Prototype Platform (WP5)
 
-Platform for incivility in simulated chatrooms.
+Platform for integrating AI agents into mock social media environments to support immersive user studies.
 
-**Status**: backend development; minimal frontend for testing. 
+**Status**: ongoing backend development; +minimal frontend for testing.
 
 ## Quick Start
 
 ### Backend
 ```bash
 cd backend
+python -m venv venv
+source venv/bin/activate  
 pip install -e .
 # Add GEMINI_API_KEY to backend/.env
 python main.py
@@ -21,7 +23,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and use token "1234"
+Open http://localhost:3000 and use a token in [participant_tokens.toml](./backend/config/participant_tokens.toml) to login. 
 
 ## Documentation
 

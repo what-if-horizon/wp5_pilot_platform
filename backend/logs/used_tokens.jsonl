@@ -1,1 +1,3 @@
 {"timestamp": "2025-11-04T12:02:01.268628", "token": "user0001", "session_id": "1f230995-5856-42b6-aff2-4f70c1d6281d", "group": "Tx1"}
+{"timestamp": "2025-11-05T09:02:59.446769", "token": "user0002", "session_id": "test-session-123", "group": "Tx1"}
+{"timestamp": "2025-11-06T11:30:49.268515", "token": "user0003", "session_id": "9a8fcf9a-56a5-457e-ba0b-eb175d4202d1", "group": "Tx2"}

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-
+# Represents an AI agent in the simulation.
+# NOTE: functional placeholder for future expansion
 @dataclass
 class Agent:
     """Represents an AI agent in the simulation."""

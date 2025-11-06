@@ -49,10 +49,26 @@ export default function ChatPage() {
         setMessages((prev) => [...prev, message])
       }
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected')
+      ws.onclose = (event: CloseEvent) => {
+        console.log('WebSocket disconnected', event)
         setIsConnected(false)
-        // Simple reconnect logic: try a few times with delay
+
+        // If server closed with policy violation (1008) we assume the session
+        // is invalid/stale. Clear stored session id and return user to token entry.
+        if (event && event.code === 1008) {
+          try {
+            localStorage.removeItem('wp5_session_id')
+          } catch (e) {
+            // ignore localStorage errors
+          }
+          setSessionId(null)
+          // Inform the user so they understand why they were disconnected.
+          // Keep this simple (alert) to avoid adding new UI components.
+          alert('Session invalid or expired. Please enter your token to start a new session.')
+          return
+        }
+
+        // Simple reconnect logic: try a few times with delay for transient disconnects
         if (reconnectAttempts < 5) {
           reconnectAttempts += 1
           reconnectTimer = window.setTimeout(() => {

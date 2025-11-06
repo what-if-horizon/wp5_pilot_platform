@@ -3,6 +3,7 @@ from datetime import datetime
 import uuid
 
 
+# Represents a single message or post. 
 @dataclass
 class Message:
     """Represents a single message in the chatroom."""

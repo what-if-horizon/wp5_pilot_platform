@@ -1,0 +1,10 @@
+# participant_tokens.toml
+# Single-use participant tokens grouped by treatment. Tokens are consumed and logged
+# in backend/logs/used_tokens.jsonl. Use this file to provision tokens for participants.
+# Example:
+# [groups]
+# Tx1 = ["user0001", "user0002"]
+
+[groups]
+Tx1 = ["user0001", "user0002"]
+Tx2 = ["user0003", "user0004"]

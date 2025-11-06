@@ -1,8 +1,0 @@
-{
-  "num_agents": 3,
-  "agent_names": ["Alice", "Bob", "Charlie"],
-  "messages_per_minute": 5,
-  "user_response_probability": 1,
-  "context_window_size": 10,
-  "session_duration_minutes": 5
-}

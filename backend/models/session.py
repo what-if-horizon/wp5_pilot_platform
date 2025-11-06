@@ -4,7 +4,8 @@ from typing import List
 from models.agent import Agent
 from models.message import Message
 
-
+# Represents the state of a simulation session.
+# NOTE: concurrent sessions handled via utils/session_manager.py
 @dataclass
 class SessionState:
     """Holds the complete state of a simulation session."""
