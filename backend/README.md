@@ -25,9 +25,10 @@ backend/
 │   └── chatroom.py                  # Chatroom simulation logic
 ├── utils/
 │   ├── __init__.py
+│   ├── config_loader.py             # small helpers to load TOML configs
 │   ├── llm_gemini.py                # Gemini API client wrapper
+│   ├── llm_manager.py               # LLM call orchestration / retries
 │   ├── logger.py                    # JSON logging helpers
-│   ├── metrics.py                   # in-memory metrics helpers
 │   ├── session_manager.py           # manage concurrent sessions
 │   └── token_manager.py             # token consumption / locking logic
 ├── config/
@@ -58,9 +59,11 @@ pip install -e .
 ```
 
 3. Create a `.env` file in the backend directory with your Gemini API key:
-- Copy `.env.example` to `.env`
-- Get a Gemini API key from https://aistudio.google.com/app/apikey
-- Add your key to `.env`:
+   - If you are using LLM features, create a file named `.env` in the `backend/` directory and add your key:
+```
+GEMINI_API_KEY=your_actual_key_here
+```
+- There is no `.env.example` in this prototype; create the file manually as shown above.
 ```
 GEMINI_API_KEY=your_actual_key_here
 ```

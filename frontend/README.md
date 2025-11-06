@@ -1,11 +1,11 @@
-# WP5 Prototype Frontend
+# Simulacra — Prototype Frontend (WP5)
 
-NOTE: this is a THROWAWAY frontend for developing the WP5 prototype backend. 
+NOTE: this is a small prototype frontend intended for local development and testing of the WP5 backend.
 
 ## Overview
 
 A simple chat interface that allows users to:
-1. Enter an authentication token (currently hardcoded as "1234")
+1. Enter an authentication token (provided by study coordinators / configured in the backend)
 2. Connect to a chatroom simulation with AI agents
 3. Send messages and see agent responses in real-time
 
@@ -26,7 +26,7 @@ frontend/
 ## Prerequisites
 
 - Node.js 18+ (or latest LTS version)
-- Backend server running on `http://localhost:8000`
+- Backend server running on `http://localhost:8000` (default for local dev)
 
 ## Setup
 
@@ -67,7 +67,7 @@ npm start
 
 1. **Start the backend server** (must be running on port 8000)
 2. **Open browser** to `http://localhost:3000`
-3. **Enter token:** Type "1234" and click "Start Session"
+3. **Enter token:** Type a valid participant token (provided by study coordinators) and click "Start Session"
 4. **Chat:** Type messages in the input box and click "Post" (or press Enter)
 5. **Watch:** AI agents will respond based on the backend configuration
 
@@ -77,19 +77,17 @@ npm start
 
 ### Backend URL
 
-The frontend is hardcoded to connect to:
+By default the frontend connects to the local backend endpoints:
 - REST API: `http://localhost:8000`
 - WebSocket: `ws://localhost:8000`
 
-To change this (e.g., for deployment), update the URLs in `app/page.tsx`:
-- Line ~63: `fetch('http://localhost:8000/session/start'`
-- Line ~47: `new WebSocket('ws://localhost:8000/ws/${sessionId}'`
+To change these (for deployment or a remote backend), edit the network URLs in `app/page.tsx` (search for `session/start` and `ws://`). For production use consider using `https://` and `wss://` and setting the URL via an environment variable or runtime config.
 
 
 ## Features
 
 ### Token Entry Screen
-- Simple authentication using hardcoded token "1234"
+- Simple authentication using single-use participant tokens validated by the backend (see `backend/config/participant_tokens.toml`)
 - Calls backend `/session/start` endpoint
 - Receives session_id for WebSocket connection
 
@@ -100,10 +98,10 @@ To change this (e.g., for deployment), update the URLs in `app/page.tsx`:
 - **Visual distinction:** User messages (blue) vs agent messages (gray)
 
 ### WebSocket Communication
-- Connects to `ws://localhost:8000/ws/{session_id}`
+- Connects to `ws://localhost:8000/ws/{session_id}` by default
 - Sends user messages: `{"type": "user_message", "content": "..."}`
 - Receives agent messages: `{"sender": "Alice", "content": "...", "timestamp": "...", "message_id": "..."}`
-- Auto-reconnection not implemented (refresh page to reconnect)
+- Auto-reconnection is not implemented; refresh the page to reconnect.
 
 
 

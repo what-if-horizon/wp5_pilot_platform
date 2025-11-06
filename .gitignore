@@ -44,6 +44,7 @@ backend/.env
 # Logs (keep directory structure, ignore content)
 backend/logs/*.json
 backend/logs/*.jsonl
+backend/logs/used_tokens.jsonl
 
 # Testing
 .pytest_cache/

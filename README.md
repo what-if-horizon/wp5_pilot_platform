@@ -12,7 +12,8 @@ cd backend
 python -m venv venv
 source venv/bin/activate  
 pip install -e .
-# Add GEMINI_API_KEY to backend/.env
+# Create `backend/.env` and add GEMINI_API_KEY if you plan to use LLM features:
+echo 'GEMINI_API_KEY=your_actual_key_here' > .env
 python main.py
 ```
 
@@ -23,7 +24,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and use a token in [participant_tokens.toml](./backend/config/participant_tokens.toml) to login. 
+Open http://localhost:3000 and use a token in [participant_tokens.toml](./backend/config/participant_tokens.toml) to login.
+
+Participant tokens are configured in `backend/config/participant_tokens.toml` and validated server-side. Provide a valid participant token when starting a session (tokens are single-use in the current prototype implementation).
 
 ## Documentation
 
