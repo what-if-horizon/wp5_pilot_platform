@@ -1,7 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Set
 
 
 # Represents a single message or post. 
@@ -18,6 +18,8 @@ class Message:
     quoted_text: Optional[str] = None  # text excerpt of the message being replied to
     # Optional mentions (tags) included in the message, e.g., ["Alice", "Bob"]
     mentions: Optional[List[str]] = None
+    # Track which participants have liked this message (store user identifiers)
+    liked_by: Set[str] = field(default_factory=set)
     
     @classmethod
     def create(
@@ -52,4 +54,22 @@ class Message:
             "reply_to": self.reply_to,
             "quoted_text": self.quoted_text,
             "mentions": self.mentions,
+            # Likes metadata
+            "likes_count": len(self.liked_by),
+            "liked_by": list(self.liked_by),
         }
+
+    # Likes management
+    @property
+    def likes_count(self) -> int:
+        """Return number of likes for this message."""
+        return len(self.liked_by)
+    
+    def toggle_like(self, user_id: str) -> str:
+        """Toggle like state for user_id. Returns 'liked' or 'unliked'."""
+        if user_id in self.liked_by:
+            self.liked_by.remove(user_id)
+            return "unliked"
+        else:
+            self.liked_by.add(user_id)
+            return "liked"

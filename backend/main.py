@@ -2,6 +2,7 @@ import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from datetime import datetime
 from typing import Optional, Dict
 import uuid
 import json
@@ -69,6 +70,15 @@ class SessionStartResponse(BaseModel):
     """Response model for session start."""
     session_id: str #from uuid 
     message: str #confirmation message (e.g. treatment group info)
+
+
+class LikeRequest(BaseModel):
+    """Request model for liking/unliking a message.
+
+    Prototype uses a simple toggle-only API. Clients submit their user id
+    and the server will flip their like state for the message.
+    """
+    user: str
 
 
 #ENDPOINT 1 for starting a new session - 
@@ -182,6 +192,67 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+@app.post("/session/{session_id}/message/{message_id}/like")
+async def like_message(session_id: str, message_id: str, payload: LikeRequest):
+    """Toggle/add/remove a like for a message in a session.
+
+    Payload contains a `user` identifier (simple prototype value, e.g. 'user')
+    and an `action` which may be 'toggle' (default), 'like' or 'unlike'.
+    The endpoint returns the updated message representation and broadcasts
+    a `message_like` event over the session websocket so other clients can
+    update in real time.
+    """
+    # Locate session
+    session = await session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Find message in session state
+    message = None
+    for m in session.state.messages:
+        if m.message_id == message_id:
+            message = m
+            break
+
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # Toggle-only API (simpler prototype contract)
+    user_id = payload.user
+    result = message.toggle_like(user_id)  # returns 'liked' or 'unliked'
+
+    # Log the like event
+    try:
+        session.logger.log_event("message_like", {
+            "message_id": message_id,
+            "user": user_id,
+            "action": result,
+            "likes_count": message.likes_count,
+        })
+    except Exception:
+        # logging failures shouldn't block the API
+        pass
+
+    # Broadcast to connected websocket (best-effort)
+    event = {
+        "event_type": "message_like",
+        "session_id": session_id,
+        "message_id": message_id,
+        "action": result,
+        "likes_count": message.likes_count,
+        "liked_by": list(message.liked_by),
+        "user": user_id,
+        "timestamp": datetime.now().isoformat(),
+    }
+    try:
+        await session.websocket_send(event)
+    except Exception:
+        # If broadcasting fails, continue — clients will reconcile on subsequent state
+        pass
+
+    return {"message": message.to_dict()}
 
 
 #ROOT ENDPOINT: API docstring

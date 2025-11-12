@@ -10,6 +10,8 @@ interface Message {
   reply_to?: string
   quoted_text?: string
   mentions?: string[]
+  likes_count?: number
+  liked_by?: string[]
 }
 
 export default function ChatPage() {
@@ -22,6 +24,7 @@ export default function ChatPage() {
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [mentions, setMentions] = useState<string[]>([])
   const [participants, setParticipants] = useState<string[]>([])
+  const [currentUser, setCurrentUser] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   
   // Refs
@@ -78,8 +81,22 @@ export default function ChatPage() {
       }
 
       ws.onmessage = (event) => {
-        const message: Message = JSON.parse(event.data)
-        setMessages((prev) => [...prev, message])
+        const obj = JSON.parse(event.data)
+
+        // Distinguish between message objects and event notifications
+        if (obj && obj.event_type === 'message_like') {
+          // Update the matching message in state with the new likes metadata
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.message_id === obj.message_id
+                ? { ...m, likes_count: obj.likes_count, liked_by: obj.liked_by }
+                : m
+            )
+          )
+        } else {
+          const message: Message = obj as Message
+          setMessages((prev) => [...prev, message])
+        }
       }
 
       ws.onclose = (event: CloseEvent) => {
@@ -141,6 +158,8 @@ export default function ChatPage() {
 
       const data = await response.json()
       setSessionId(data.session_id)
+      // Use the entered token as a simple client identifier for likes
+      setCurrentUser(token || 'user')
       // persist session id so reloads reconnect automatically
       try {
         localStorage.setItem('wp5_session_id', data.session_id)
@@ -277,6 +296,58 @@ export default function ChatPage() {
                 aria-label={`Reply to message ${msg.message_id}`}
               >
                 Reply
+              </button>
+              <button
+                onClick={async () => {
+                  // optimistic toggle
+                  const uid = currentUser || token || 'user'
+                  // Update local state optimistically
+                  setMessages((prev) =>
+                    prev.map((mm) => {
+                      if (mm.message_id !== msg.message_id) return mm
+                      const likedBy = new Set(mm.liked_by || [])
+                      if (likedBy.has(uid)) {
+                        likedBy.delete(uid)
+                      } else {
+                        likedBy.add(uid)
+                      }
+                      return { ...mm, liked_by: Array.from(likedBy), likes_count: likedBy.size }
+                    })
+                  )
+
+                  try {
+                    const res = await fetch(`http://localhost:8000/session/${sessionId}/message/${msg.message_id}/like`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ user: uid }),
+                    })
+                    if (!res.ok) throw new Error('Network error')
+                    const data = await res.json()
+                    const serverMsg = data.message
+                    // Reconcile with server authoritative state
+                    setMessages((prev) => prev.map((mm) => (mm.message_id === serverMsg.message_id ? { ...mm, likes_count: serverMsg.likes_count, liked_by: serverMsg.liked_by } : mm)))
+                  } catch (e) {
+                    // On error, revert optimistic update by re-requesting the message list isn't available — simple fallback: flip back
+                    setMessages((prev) =>
+                      prev.map((mm) => {
+                        if (mm.message_id !== msg.message_id) return mm
+                        const likedBy = new Set(mm.liked_by || [])
+                        // revert optimistic flip
+                        if (likedBy.has(uid)) {
+                          likedBy.delete(uid)
+                        } else {
+                          likedBy.add(uid)
+                        }
+                        return { ...mm, liked_by: Array.from(likedBy), likes_count: likedBy.size }
+                      })
+                    )
+                    console.warn('Like request failed', e)
+                  }
+                }}
+                style={{ ...styles.replyButton, marginLeft: '0.5rem' }}
+                aria-label={`Like message ${msg.message_id}`}
+              >
+                {msg.liked_by && (currentUser || token) && msg.liked_by.includes(currentUser || token) ? '♥' : '♡'} {msg.likes_count || 0}
               </button>
               <button
                 onClick={() => {
