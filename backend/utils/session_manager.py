@@ -1,7 +1,7 @@
 import asyncio
 from typing import Dict, Optional
 
-from simulation import SimulationSession
+from platforms import SimulationSession
 
 
 class SessionManager:

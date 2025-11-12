@@ -15,7 +15,7 @@ from pathlib import Path
 
 # Import simulation logic (i.e., platform)
 #NOTE: for pilot we only have one simulation type (chatroom)
-from simulation import SimulationSession
+from platforms import SimulationSession
 # Import concurrent session manager: 
 from utils.session_manager import session_manager
 # Import login token manager and llm client
@@ -153,8 +153,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             # Expected format: {"type": "user_message", "content": "..."}
             if data.get("type") == "user_message":
                 content = data.get("content", "").strip()
+                # Optional reply metadata sent from frontend
+                reply_to = data.get("reply_to")
+                quoted_text = data.get("quoted_text")
+                mentions = data.get("mentions")
                 if content:
-                    await session.handle_user_message(content)
+                    await session.handle_user_message(content, reply_to=reply_to, quoted_text=quoted_text, mentions=mentions)
 
     # Handle clean disconnects
     except WebSocketDisconnect:

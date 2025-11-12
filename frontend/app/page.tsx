@@ -7,6 +7,9 @@ interface Message {
   content: string
   timestamp: string
   message_id: string
+  reply_to?: string
+  quoted_text?: string
+  mentions?: string[]
 }
 
 export default function ChatPage() {
@@ -16,6 +19,10 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isConnected, setIsConnected] = useState(false)
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [mentions, setMentions] = useState<string[]>([])
+  const [participants, setParticipants] = useState<string[]>([])
+  const inputRef = useRef<HTMLInputElement | null>(null)
   
   // Refs
   const wsRef = useRef<WebSocket | null>(null)
@@ -25,6 +32,32 @@ export default function ChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Keep participants list (known senders) up-to-date from observed messages
+  useEffect(() => {
+    const set = new Set(messages.map((m) => m.sender))
+    setParticipants([...set])
+  }, [messages])
+
+  // Helper: detect mentions in free text using @name tokens and match to known participants
+  const detectMentions = (text: string) => {
+    const found: string[] = []
+    if (!text) return found
+    const re = /@([A-Za-z0-9_\-]+)/g
+    // build lookup map for case-insensitive matching
+    const map = new Map(participants.map((p) => [p.toLowerCase(), p]))
+    let m
+    // eslint-disable-next-line no-cond-assign
+    while ((m = re.exec(text)) !== null) {
+      const raw = m[1]
+      const key = raw.toLowerCase()
+      if (map.has(key)) {
+        const canonical = map.get(key) as string
+        if (!found.includes(canonical)) found.push(canonical)
+      }
+    }
+    return found
+  }
 
   // WebSocket connection
   useEffect(() => {
@@ -133,24 +166,38 @@ export default function ChatPage() {
   // Send message
   const handleSendMessage = () => {
     if (!inputValue.trim() || !wsRef.current) return
-
-    const message = {
+    const payload: any = {
       type: 'user_message',
       content: inputValue.trim(),
     }
 
-    wsRef.current.send(JSON.stringify(message))
-    
-    // Add user message to display immediately
+    // If replying to a message, include reply metadata
+    if (replyTo) {
+      payload.reply_to = replyTo.message_id
+      payload.quoted_text = replyTo.content
+    }
+
+    // Include mentions if any (detect from typed text to allow multiple mentions)
+    const detected = detectMentions(inputValue)
+    if (detected.length > 0) payload.mentions = detected
+
+    wsRef.current.send(JSON.stringify(payload))
+
+    // Add user message to display immediately (include reply metadata so UI is consistent)
     const userMessage: Message = {
       sender: 'user',
       content: inputValue.trim(),
       timestamp: new Date().toISOString(),
       message_id: `user-${Date.now()}`,
+      reply_to: replyTo ? replyTo.message_id : undefined,
+      quoted_text: replyTo ? replyTo.content : undefined,
+      mentions: detected.length ? detected : undefined,
     }
     setMessages((prev) => [...prev, userMessage])
-    
+
     setInputValue('')
+    setReplyTo(null)
+    setMentions([])
   }
 
   // Handle Enter key
@@ -205,7 +252,63 @@ export default function ChatPage() {
             }}
           >
             <div style={styles.messageSender}>{msg.sender}</div>
+            {/* Render quoted block when present */}
+            {msg.quoted_text ? (
+              <div style={styles.quotedBlock}>
+                <div style={styles.quotedSender}>Quoted</div>
+                <div style={styles.quotedText}>{msg.quoted_text}</div>
+              </div>
+            ) : null}
+            {/* Render mentions if present */}
+            {msg.mentions && msg.mentions.length ? (
+              <div style={styles.mentionsRow}>
+                {msg.mentions.map((m) => (
+                  <span key={m} style={styles.mentionTag}>@{m}</span>
+                ))}
+              </div>
+            ) : null}
             <div style={styles.messageContent}>{msg.content}</div>
+
+            {/* Reply button */}
+            <div>
+              <button
+                onClick={() => setReplyTo(msg)}
+                style={styles.replyButton}
+                aria-label={`Reply to message ${msg.message_id}`}
+              >
+                Reply
+              </button>
+              <button
+                onClick={() => {
+                  // Insert mention at the current cursor position (or prepend if input not focused)
+                  const mentionText = `@${msg.sender} `
+                  const el = inputRef.current
+                  if (el) {
+                    const start = el.selectionStart ?? 0
+                    const end = el.selectionEnd ?? 0
+                    const newVal = inputValue.slice(0, start) + mentionText + inputValue.slice(end)
+                    setInputValue(newVal)
+                    // update detected mentions immediately
+                    setMentions(detectMentions(newVal))
+                    // place caret after inserted mention
+                    setTimeout(() => {
+                      el.focus()
+                      const pos = start + mentionText.length
+                      el.setSelectionRange(pos, pos)
+                    }, 0)
+                  } else {
+                    // fallback: prepend
+                    const newVal = `${mentionText}${inputValue}`
+                    setInputValue(newVal)
+                    setMentions(detectMentions(newVal))
+                  }
+                }}
+                style={{ ...styles.replyButton, marginLeft: '0.5rem' }}
+                aria-label={`Mention ${msg.sender}`}
+              >
+                @{msg.sender}
+              </button>
+            </div>
           </div>
         ))}
         <div ref={messagesEndRef} />
@@ -213,10 +316,32 @@ export default function ChatPage() {
 
       {/* Input area */}
       <div style={styles.inputArea}>
+        {/* Composer: show replying-to box when replying */}
+        {replyTo ? (
+          <div style={styles.replyingBox}>
+            <div style={styles.replyingLabel}>Replying to {replyTo.sender}</div>
+            <div style={styles.replyingPreview}>{replyTo.content.length > 120 ? replyTo.content.slice(0, 120) + '…' : replyTo.content}</div>
+            <button onClick={() => setReplyTo(null)} style={styles.cancelReplyButton}>Cancel</button>
+          </div>
+        ) : null}
+        {/* Composer: show mention tags if any */}
+        {mentions && mentions.length ? (
+          <div style={styles.mentionsBox}>
+            {mentions.map((m) => (
+              <span key={m} style={styles.mentionTag}>{`@${m}`}</span>
+            ))}
+            <button onClick={() => setMentions([])} style={styles.cancelReplyButton}>Clear</button>
+          </div>
+        ) : null}
         <input
+          ref={inputRef}
           type="text"
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value
+            setInputValue(v)
+            setMentions(detectMentions(v))
+          }}
           onKeyPress={handleKeyPress}
           placeholder="Type a message..."
           style={styles.messageInput}
@@ -311,6 +436,81 @@ const styles = {
   },
   messageContent: {
     fontSize: '1rem',
+  },
+  quotedBlock: {
+    padding: '0.5rem',
+    marginBottom: '0.5rem',
+    backgroundColor: '#ffffff',
+    borderLeft: '3px solid #ddd',
+    borderRadius: '4px',
+  },
+  quotedSender: {
+    fontSize: '0.75rem',
+    color: '#666',
+    marginBottom: '0.25rem',
+  },
+  quotedText: {
+    fontSize: '0.9rem',
+    color: '#333',
+  },
+  replyButton: {
+    marginTop: '0.5rem',
+    padding: '0.25rem 0.5rem',
+    fontSize: '0.8rem',
+    backgroundColor: 'transparent',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    cursor: 'pointer',
+  },
+  replyingBox: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    padding: '0.5rem',
+    marginRight: '0.5rem',
+    border: '1px solid #ddd',
+    borderRadius: '6px',
+    backgroundColor: '#fff8e1',
+    maxWidth: '50%',
+  },
+  replyingLabel: {
+    fontSize: '0.8rem',
+    color: '#333',
+    marginBottom: '0.25rem',
+  },
+  replyingPreview: {
+    fontSize: '0.9rem',
+    color: '#555',
+    marginBottom: '0.25rem',
+  },
+  cancelReplyButton: {
+    alignSelf: 'flex-end' as const,
+    padding: '0.25rem 0.5rem',
+    fontSize: '0.8rem',
+    backgroundColor: '#f44336',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+  },
+  mentionsRow: {
+    marginBottom: '0.5rem',
+    display: 'flex',
+    gap: '0.5rem',
+    alignItems: 'center',
+  },
+  mentionTag: {
+    padding: '0.25rem 0.5rem',
+    backgroundColor: '#e8f0fe',
+    border: '1px solid #d0e0ff',
+    borderRadius: '4px',
+    fontSize: '0.85rem',
+    color: '#0366d6',
+  },
+  mentionsBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    marginRight: '0.5rem',
   },
   inputArea: {
     display: 'flex',
