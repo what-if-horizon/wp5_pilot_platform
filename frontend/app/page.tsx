@@ -12,6 +12,7 @@ interface Message {
   mentions?: string[]
   likes_count?: number
   liked_by?: string[]
+  reported?: boolean
 }
 
 export default function ChatPage() {
@@ -25,6 +26,10 @@ export default function ChatPage() {
   const [mentions, setMentions] = useState<string[]>([])
   const [participants, setParticipants] = useState<string[]>([])
   const [currentUser, setCurrentUser] = useState<string | null>(null)
+  const [blockedSenders, setBlockedSenders] = useState<Record<string, string>>({})
+  const [reportModalOpen, setReportModalOpen] = useState(false)
+  const [reportTarget, setReportTarget] = useState<Message | null>(null)
+  const [reporting, setReporting] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   
   // Refs
@@ -84,7 +89,7 @@ export default function ChatPage() {
         const obj = JSON.parse(event.data)
 
         // Distinguish between message objects and event notifications
-        if (obj && obj.event_type === 'message_like') {
+    if (obj && obj.event_type === 'message_like') {
           // Update the matching message in state with the new likes metadata
           setMessages((prev) =>
             prev.map((m) =>
@@ -93,6 +98,17 @@ export default function ChatPage() {
                 : m
             )
           )
+        } else if (obj && obj.event_type === 'message_report') {
+          // Update the reported flag for the message
+          setMessages((prev) => prev.map((m) => (m.message_id === obj.message_id ? { ...m, reported: obj.reported } : m)))
+        } else if (obj && obj.event_type === 'user_block') {
+          // Update blocked senders (mapping sender->iso) for this client
+          if (obj.blocked && typeof obj.blocked === 'object') {
+            setBlockedSenders(obj.blocked)
+            try {
+              localStorage.setItem('wp5_blocked_senders', JSON.stringify(obj.blocked))
+            } catch (e) {}
+          }
         } else {
           const message: Message = obj as Message
           setMessages((prev) => [...prev, message])
@@ -177,6 +193,14 @@ export default function ChatPage() {
     try {
       const saved = localStorage.getItem('wp5_session_id')
       if (saved) setSessionId(saved)
+      const blocked = localStorage.getItem('wp5_blocked_senders')
+      if (blocked) {
+        try {
+          setBlockedSenders(JSON.parse(blocked) as Record<string, string>)
+        } catch (e) {
+          setBlockedSenders({})
+        }
+      }
     } catch (e) {
       // ignore
     }
@@ -217,6 +241,61 @@ export default function ChatPage() {
     setInputValue('')
     setReplyTo(null)
     setMentions([])
+  }
+
+  // Perform reporting action (report only or report+block)
+  const performReport = async (block: boolean) => {
+    if (!reportTarget || !sessionId) return
+    setReporting(true)
+    const uid = currentUser || token || 'user'
+    const messageId = reportTarget.message_id
+    const sender = reportTarget.sender
+    const prevReported = reportTarget.reported || false
+
+    // Optimistic update: mark reported and optionally block sender locally
+    setMessages((prev) => prev.map((mm) => (mm.message_id === messageId ? { ...mm, reported: true } : mm)))
+    if (block) {
+      const nowIso = new Date().toISOString()
+      setBlockedSenders((prev) => {
+        if (prev[sender]) return prev
+        const next = { ...prev, [sender]: nowIso }
+        try { localStorage.setItem('wp5_blocked_senders', JSON.stringify(next)) } catch (e) {}
+        return next
+      })
+    }
+
+    try {
+      const res = await fetch(`http://localhost:8000/session/${sessionId}/message/${messageId}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: uid, block }),
+      })
+      if (!res.ok) throw new Error('Network error')
+      const data = await res.json()
+      const serverMsg = data.message
+      // Reconcile with server authoritative state
+      setMessages((prev) => prev.map((mm) => (mm.message_id === serverMsg.message_id ? { ...mm, reported: serverMsg.reported } : mm)))
+      if (data.blocked && typeof data.blocked === 'object') {
+        setBlockedSenders(data.blocked)
+        try { localStorage.setItem('wp5_blocked_senders', JSON.stringify(data.blocked)) } catch (e) {}
+      }
+    } catch (e) {
+      // Revert optimistic changes
+      setMessages((prev) => prev.map((mm) => (mm.message_id === messageId ? { ...mm, reported: prevReported } : mm)))
+      if (block) {
+        setBlockedSenders((prev) => {
+          const next = { ...prev }
+          delete next[sender]
+          try { localStorage.setItem('wp5_blocked_senders', JSON.stringify(next)) } catch (e) {}
+          return next
+        })
+      }
+      console.warn('Report request failed', e)
+    } finally {
+      setReporting(false)
+      setReportModalOpen(false)
+      setReportTarget(null)
+    }
   }
 
   // Handle Enter key
@@ -262,7 +341,19 @@ export default function ChatPage() {
 
       {/* Message feed */}
       <div style={styles.messagesFeed}>
-        {messages.map((msg) => (
+        {messages
+          .filter((msg) => {
+            const blockedIso = blockedSenders[msg.sender]
+            if (!blockedIso) return true
+            try {
+              const msgTime = new Date(msg.timestamp)
+              const blockedTime = new Date(blockedIso)
+              return msgTime < blockedTime
+            } catch (e) {
+              return true
+            }
+          })
+          .map((msg) => (
           <div
             key={msg.message_id}
             style={{
@@ -350,6 +441,13 @@ export default function ChatPage() {
                 {msg.liked_by && (currentUser || token) && msg.liked_by.includes(currentUser || token) ? '♥' : '♡'} {msg.likes_count || 0}
               </button>
               <button
+                onClick={() => { setReportTarget(msg); setReportModalOpen(true); }}
+                style={{ ...styles.replyButton, marginLeft: '0.5rem', color: '#c62828' }}
+                aria-label={`Report message ${msg.message_id}`}
+              >
+                🚩
+              </button>
+              <button
                 onClick={() => {
                   // Insert mention at the current cursor position (or prepend if input not focused)
                   const mentionText = `@${msg.sender} `
@@ -384,6 +482,21 @@ export default function ChatPage() {
         ))}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Report modal */}
+      {reportModalOpen && reportTarget ? (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} role="dialog" aria-modal="true">
+          <div style={{ background: 'white', padding: '1.25rem', borderRadius: '8px', width: '90%', maxWidth: '420px', boxShadow: '0 6px 24px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ marginTop: 0 }}>Report message</h3>
+            <p>We’ll show you fewer messages like this. Would you also like to block messages from <strong>{reportTarget.sender}</strong>?</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+              <button onClick={() => performReport(false)} disabled={reporting} style={{ padding: '0.5rem 0.75rem', borderRadius: 4, border: '1px solid #ddd', background: '#fff' }}>Report</button>
+              <button onClick={() => performReport(true)} disabled={reporting} style={{ padding: '0.5rem 0.75rem', borderRadius: 4, border: '1px solid #c62828', background: '#c62828', color: 'white' }}>Report and block sender</button>
+              <button onClick={() => { setReportModalOpen(false); setReportTarget(null); }} disabled={reporting} style={{ padding: '0.5rem 0.75rem', borderRadius: 4, border: '1px solid #ddd', background: '#fff' }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Input area */}
       <div style={styles.inputArea}>

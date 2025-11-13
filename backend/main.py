@@ -81,6 +81,18 @@ class LikeRequest(BaseModel):
     user: str
 
 
+class ReportRequest(BaseModel):
+    """Request model for reporting a message.
+
+    user: reporter id (prototype uses the client token/display name)
+    block: whether to also block the sender (default: False)
+    reason: optional free-text reason
+    """
+    user: str
+    block: Optional[bool] = False
+    reason: Optional[str] = None
+
+
 #ENDPOINT 1 for starting a new session - 
 #NOTE: at this point we begin asynchronous session management (multiple user-sessions)
 @app.post("/session/start", response_model=SessionStartResponse)
@@ -253,6 +265,82 @@ async def like_message(session_id: str, message_id: str, payload: LikeRequest):
         pass
 
     return {"message": message.to_dict()}
+
+
+@app.post("/session/{session_id}/message/{message_id}/report")
+async def report_message(session_id: str, message_id: str, payload: ReportRequest):
+    """Report a message and optionally block the sender for this session's user.
+
+    Because sessions are single-user, we represent reports as a boolean flag on
+    the message and store blocked agent names in the session state.
+    """
+    session = await session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Find message
+    message = None
+    for m in session.state.messages:
+        if m.message_id == message_id:
+            message = m
+            break
+
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    user_id = payload.user
+    block = bool(payload.block)
+
+    # Toggle reported flag on the message
+    result = message.toggle_report()  # 'reported' or 'unreported'
+
+    # If requested, block the sender (agent) for this session
+    blocked = None
+    target_sender = message.sender
+    if block and target_sender:
+        # Only block agent senders (skip blocking if the sender is the human)
+        if target_sender != "user":
+            when_iso = datetime.now().isoformat()
+            session.state.block_agent(target_sender, when_iso)
+            # Return the mapping of blocked agents -> ISO time so clients can apply
+            # selective suppression of future messages.
+            blocked = dict(session.state.blocked_agents)
+
+    # Log the report event
+    try:
+        session.logger.log_event("message_report", {
+            "message_id": message_id,
+            "user": user_id,
+            "action": result,
+            "blocked": blocked,
+            "reason": payload.reason,
+        })
+    except Exception:
+        pass
+
+    # Broadcast report and block events to the websocket (best-effort)
+    try:
+        await session.websocket_send({
+            "event_type": "message_report",
+            "session_id": session_id,
+            "message_id": message_id,
+            "action": result,
+            "user": user_id,
+            "reported": message.reported,
+            "timestamp": datetime.now().isoformat(),
+        })
+        if blocked is not None:
+            await session.websocket_send({
+                "event_type": "user_block",
+                "session_id": session_id,
+                "user": user_id,
+                "blocked": blocked,
+                "timestamp": datetime.now().isoformat(),
+            })
+    except Exception:
+        pass
+
+    return {"message": message.to_dict(), "blocked": blocked}
 
 
 #ROOT ENDPOINT: API docstring

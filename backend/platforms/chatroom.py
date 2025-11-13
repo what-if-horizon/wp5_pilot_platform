@@ -23,7 +23,10 @@ class SimulationSession:
 
     def __init__(self, session_id: str, websocket_send: Callable, treatment_group: str):
         self.session_id = session_id
-        self.websocket_send = websocket_send or self._noop_send
+        # Wrap provided websocket_send so we can apply per-sender blocking rules
+        # (suppress future messages from blocked senders while keeping past messages visible).
+        original_send = websocket_send or self._noop_send
+        self.websocket_send = self._wrap_send(original_send)
         self.logger = Logger(session_id)
 
         self.experimental_settings_full = load_config("config/experimental_settings.toml")
@@ -120,10 +123,42 @@ class SimulationSession:
     async def _noop_send(self, message: dict) -> None:
         return
 
+    def _wrap_send(self, send_callable: Callable):
+        """Return an async wrapper that checks blocked_agents before sending a message.
+
+        send_callable is expected to be an async function accepting a message dict.
+        """
+        async def wrapper(message_dict: dict):
+            try:
+                sender = message_dict.get("sender")
+                # If sender is blocked, and the message timestamp is >= blocked time, suppress it
+                if sender and hasattr(self.state, "blocked_agents") and sender in self.state.blocked_agents:
+                    blocked_iso = self.state.blocked_agents.get(sender)
+                    if blocked_iso:
+                        try:
+                            msg_time = datetime.fromisoformat(message_dict.get("timestamp"))
+                            blocked_time = datetime.fromisoformat(blocked_iso)
+                            if msg_time >= blocked_time:
+                                # Suppress sending this message to the client
+                                return
+                        except Exception:
+                            # If parsing fails, fall back to sending (safer)
+                            pass
+                await send_callable(message_dict)
+            except Exception as e:
+                # don't let send failures crash the session
+                try:
+                    self.logger.log_error("send", str(e))
+                except Exception:
+                    pass
+
+        return wrapper
+
     async def attach_websocket(self, websocket_send: Callable) -> None:
-        self.websocket_send = websocket_send
-        # update actor manager's websocket sender
-        self.actor_manager.set_websocket_send(websocket_send)
+        # Wrap the provided send function so per-sender blocking is enforced
+        self.websocket_send = self._wrap_send(websocket_send)
+        # update actor manager's websocket sender to the wrapped sender
+        self.actor_manager.set_websocket_send(self.websocket_send)
         for m in self.state.messages:
             try:
                 await self.websocket_send(m.to_dict())

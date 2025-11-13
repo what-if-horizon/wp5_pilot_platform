@@ -20,6 +20,8 @@ class Message:
     mentions: Optional[List[str]] = None
     # Track which participants have liked this message (store user identifiers)
     liked_by: Set[str] = field(default_factory=set)
+    # Whether this message has been reported by the (single) human participant
+    reported: bool = False
     
     @classmethod
     def create(
@@ -57,6 +59,8 @@ class Message:
             # Likes metadata
             "likes_count": len(self.liked_by),
             "liked_by": list(self.liked_by),
+            # Reported flag (single human participant model)
+            "reported": self.reported,
         }
 
     # Likes management
@@ -73,3 +77,12 @@ class Message:
         else:
             self.liked_by.add(user_id)
             return "liked"
+
+    def toggle_report(self) -> str:
+        """Toggle the reported flag for this message. Returns 'reported' or 'unreported'."""
+        if self.reported:
+            self.reported = False
+            return "unreported"
+        else:
+            self.reported = True
+            return "reported"

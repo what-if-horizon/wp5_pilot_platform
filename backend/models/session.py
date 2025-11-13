@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List
+from typing import List, Dict
 from models.agent import Agent
 from models.message import Message
 
@@ -19,6 +19,10 @@ class SessionState:
     experimental_config: dict = field(default_factory=dict)
     simulation_config: dict = field(default_factory=dict)
     treatment_group: str = None
+    # Map of agent name -> ISO timestamp when the agent was blocked for this session
+    # This allows keeping existing messages visible while suppressing new ones
+    # created after the block time.
+    blocked_agents: Dict[str, str] = field(default_factory=dict)
     
     def add_message(self, message: Message) -> None:
         """Add a message to the session history."""
@@ -32,3 +36,11 @@ class SessionState:
         """Check if the session has exceeded its duration."""
         elapsed = (datetime.now() - self.start_time).total_seconds() / 60
         return elapsed >= self.duration_minutes
+
+    def block_agent(self, agent_name: str, when_iso: str) -> None:
+        """Mark an agent as blocked at the given ISO timestamp for this session."""
+        self.blocked_agents[agent_name] = when_iso
+
+    def unblock_agent(self, agent_name: str) -> None:
+        """Unblock a previously blocked agent."""
+        self.blocked_agents.pop(agent_name, None)
