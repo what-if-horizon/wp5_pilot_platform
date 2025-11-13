@@ -34,8 +34,8 @@ class Logger:
     
     def log_session_start(self, experimental_config: dict, simulation_config: dict, treatment_group: str) -> None:
         """Log session initialization with config snapshots and assigned treatment group."""
+        # session_id is included by the outer envelope in log_event; avoid duplication
         self.log_event("session_start", {
-            "session_id": self.session_id,
             "treatment_group": treatment_group,
             "experimental_config": experimental_config,
             "simulation_config": simulation_config
@@ -43,8 +43,8 @@ class Logger:
     
     def log_session_end(self, reason: str = "completed") -> None:
         """Log session termination."""
+        # session_id provided in the envelope by log_event, no need to repeat it here
         self.log_event("session_end", {
-            "session_id": self.session_id,
             "reason": reason
         })
     

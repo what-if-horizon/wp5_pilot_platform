@@ -159,15 +159,28 @@ class SimulationSession:
         self.websocket_send = self._wrap_send(websocket_send)
         # update actor manager's websocket sender to the wrapped sender
         self.actor_manager.set_websocket_send(self.websocket_send)
+        # Replay existing messages to the client (best-effort)
+        replayed = 0
         for m in self.state.messages:
             try:
                 await self.websocket_send(m.to_dict())
+                replayed += 1
             except Exception:
                 continue
+        # Log websocket attach with the number of replayed messages for auditability
+        try:
+            self.logger.log_event("websocket_attach", {"replayed_messages": replayed})
+        except Exception:
+            pass
 
     def detach_websocket(self) -> None:
         self.websocket_send = self._noop_send
         self.actor_manager.set_websocket_send(None)
+        # Log websocket detach so reconnections are visible in logs
+        try:
+            self.logger.log_event("websocket_detach", {})
+        except Exception:
+            pass
 
     def _build_prompt(self, agent: Agent) -> str:
         context_size = self.simulation_config["context_window_size"]

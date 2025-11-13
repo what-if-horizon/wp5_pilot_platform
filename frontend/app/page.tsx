@@ -250,6 +250,14 @@ export default function ChatPage() {
     const uid = currentUser || token || 'user'
     const messageId = reportTarget.message_id
     const sender = reportTarget.sender
+    // Prevent reporting/blocking yourself
+    if (sender === uid) {
+      // close modal and noop
+      setReporting(false)
+      setReportModalOpen(false)
+      setReportTarget(null)
+      return
+    }
     const prevReported = reportTarget.reported || false
 
     // Optimistic update: mark reported and optionally block sender locally
@@ -353,7 +361,9 @@ export default function ChatPage() {
               return true
             }
           })
-          .map((msg) => (
+          .map((msg) => {
+          const isSelf = msg.sender === (currentUser || token || 'user')
+          return (
           <div
             key={msg.message_id}
             style={{
@@ -440,46 +450,50 @@ export default function ChatPage() {
               >
                 {msg.liked_by && (currentUser || token) && msg.liked_by.includes(currentUser || token) ? '♥' : '♡'} {msg.likes_count || 0}
               </button>
-              <button
-                onClick={() => { setReportTarget(msg); setReportModalOpen(true); }}
-                style={{ ...styles.replyButton, marginLeft: '0.5rem', color: '#c62828' }}
-                aria-label={`Report message ${msg.message_id}`}
-              >
-                🚩
-              </button>
-              <button
-                onClick={() => {
-                  // Insert mention at the current cursor position (or prepend if input not focused)
-                  const mentionText = `@${msg.sender} `
-                  const el = inputRef.current
-                  if (el) {
-                    const start = el.selectionStart ?? 0
-                    const end = el.selectionEnd ?? 0
-                    const newVal = inputValue.slice(0, start) + mentionText + inputValue.slice(end)
-                    setInputValue(newVal)
-                    // update detected mentions immediately
-                    setMentions(detectMentions(newVal))
-                    // place caret after inserted mention
-                    setTimeout(() => {
-                      el.focus()
-                      const pos = start + mentionText.length
-                      el.setSelectionRange(pos, pos)
-                    }, 0)
-                  } else {
-                    // fallback: prepend
-                    const newVal = `${mentionText}${inputValue}`
-                    setInputValue(newVal)
-                    setMentions(detectMentions(newVal))
-                  }
-                }}
-                style={{ ...styles.replyButton, marginLeft: '0.5rem' }}
-                aria-label={`Mention ${msg.sender}`}
-              >
-                @{msg.sender}
-              </button>
+              {!isSelf ? (
+                <>
+                  <button
+                    onClick={() => { setReportTarget(msg); setReportModalOpen(true); }}
+                    style={{ ...styles.replyButton, marginLeft: '0.5rem', color: '#c62828' }}
+                    aria-label={`Report message ${msg.message_id}`}
+                  >
+                    🚩
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Insert mention at the current cursor position (or prepend if input not focused)
+                      const mentionText = `@${msg.sender} `
+                      const el = inputRef.current
+                      if (el) {
+                        const start = el.selectionStart ?? 0
+                        const end = el.selectionEnd ?? 0
+                        const newVal = inputValue.slice(0, start) + mentionText + inputValue.slice(end)
+                        setInputValue(newVal)
+                        // update detected mentions immediately
+                        setMentions(detectMentions(newVal))
+                        // place caret after inserted mention
+                        setTimeout(() => {
+                          el.focus()
+                          const pos = start + mentionText.length
+                          el.setSelectionRange(pos, pos)
+                        }, 0)
+                      } else {
+                        // fallback: prepend
+                        const newVal = `${mentionText}${inputValue}`
+                        setInputValue(newVal)
+                        setMentions(detectMentions(newVal))
+                      }
+                    }}
+                    style={{ ...styles.replyButton, marginLeft: '0.5rem' }}
+                    aria-label={`Mention ${msg.sender}`}
+                  >
+                    @{msg.sender}
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
-        ))}
+        )})}
         <div ref={messagesEndRef} />
       </div>
 

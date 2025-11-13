@@ -302,6 +302,15 @@ async def report_message(session_id: str, message_id: str, payload: ReportReques
         if target_sender != "user":
             when_iso = datetime.now().isoformat()
             session.state.block_agent(target_sender, when_iso)
+            # Log the explicit user_block event so block actions appear as top-level events
+            try:
+                session.logger.log_event("user_block", {
+                    "agent_name": target_sender,
+                    "blocked_at": when_iso,
+                    "by": user_id,
+                })
+            except Exception:
+                pass
             # Return the mapping of blocked agents -> ISO time so clients can apply
             # selective suppression of future messages.
             blocked = dict(session.state.blocked_agents)
