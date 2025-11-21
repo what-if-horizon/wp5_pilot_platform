@@ -16,6 +16,8 @@ class SessionState:
     start_time: datetime = field(default_factory=datetime.now)
     duration_minutes: int = 15
     pending_user_response: bool = False
+    # Identifier for the human participant in this session (default 'user')
+    user_name: str = "user"
     experimental_config: dict = field(default_factory=dict)
     simulation_config: dict = field(default_factory=dict)
     treatment_group: str = None
@@ -23,7 +25,7 @@ class SessionState:
     # This allows keeping existing messages visible while suppressing new ones
     # created after the block time.
     blocked_agents: Dict[str, str] = field(default_factory=dict)
-    
+ 
     def add_message(self, message: Message) -> None:
         """Add a message to the session history."""
         self.messages.append(message)

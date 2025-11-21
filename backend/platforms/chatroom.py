@@ -21,7 +21,7 @@ class SimulationSession:
     - delegating agent decisions/actions to `AgentManager` (the "push")
     """
 
-    def __init__(self, session_id: str, websocket_send: Callable, treatment_group: str):
+    def __init__(self, session_id: str, websocket_send: Callable, treatment_group: str, user_name: str = "user"):
         self.session_id = session_id
         # Wrap provided websocket_send so we can apply per-sender blocking rules
         # (suppress future messages from blocked senders while keeping past messages visible).
@@ -51,6 +51,7 @@ class SimulationSession:
             experimental_config=self.experimental_config,
             treatment_group=treatment_group,
             simulation_config=self.simulation_config,
+            user_name=user_name,
         )
 
         # Create the Actor manager responsible for selecting agents and performing actions.
@@ -112,7 +113,7 @@ class SimulationSession:
                 print(f"Error in clock loop: {e}")
 
     async def handle_user_message(self, content: str, reply_to: Optional[str] = None, quoted_text: Optional[str] = None, mentions: Optional[list] = None) -> None:
-        message = Message.create(sender="user", content=content, reply_to=reply_to, quoted_text=quoted_text, mentions=mentions)
+        message = Message.create(sender=self.state.user_name, content=content, reply_to=reply_to, quoted_text=quoted_text, mentions=mentions)
         self.state.add_message(message)
         self.logger.log_message(message.to_dict())
 

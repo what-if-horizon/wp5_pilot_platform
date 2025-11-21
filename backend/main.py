@@ -65,6 +65,7 @@ except Exception as e:
 class SessionStartRequest(BaseModel):
     """Request model for starting a session."""
     token: str  # single-use participant token (validated against config/participant_tokens.toml)
+    username: str
 
 class SessionStartResponse(BaseModel):
     """Response model for session start."""
@@ -114,7 +115,8 @@ async def start_session(request: SessionStartRequest):
         raise HTTPException(status_code=401, detail="Invalid or already-used token")
 
     # Reserve pending session with treatment group
-    await session_manager.reserve_pending(session_id, {"treatment_group": group})
+    # Store requested username/handle to be attached to the session when websocket connects
+    await session_manager.reserve_pending(session_id, {"treatment_group": group, "user_name": request.username})
 
     # Return session id and confirmation message
     return SessionStartResponse(
@@ -164,7 +166,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             return
 
         # Create and start a new session with the reserved treatment_group
-        session = await session_manager.create_session(session_id, send_to_frontend, treatment_group=treatment_group)
+        user_name = pending.get("user_name") or "user"
+        session = await session_manager.create_session(session_id, send_to_frontend, treatment_group=treatment_group, user_name=user_name)
         active_session = session
     
     try:
@@ -299,7 +302,7 @@ async def report_message(session_id: str, message_id: str, payload: ReportReques
     target_sender = message.sender
     if block and target_sender:
         # Only block agent senders (skip blocking if the sender is the human)
-        if target_sender != "user":
+        if target_sender != session.state.user_name:
             when_iso = datetime.now().isoformat()
             session.state.block_agent(target_sender, when_iso)
             # Log the explicit user_block event so block actions appear as top-level events

@@ -31,7 +31,7 @@ class SessionManager:
         async with self._lock:
             return self._pending.pop(session_id, {})
 
-    async def create_session(self, session_id: str, websocket_send, treatment_group: str) -> SimulationSession:
+    async def create_session(self, session_id: str, websocket_send, treatment_group: str, user_name: str = "user") -> SimulationSession:
         """Create and start a SimulationSession if not present; return the session.
 
         `treatment_group` is required — sessions must always be created with a treatment.
@@ -39,7 +39,7 @@ class SessionManager:
         async with self._lock:
             if session_id in self._sessions:
                 return self._sessions[session_id]
-            session = SimulationSession(session_id=session_id, websocket_send=websocket_send, treatment_group=treatment_group)
+            session = SimulationSession(session_id=session_id, websocket_send=websocket_send, treatment_group=treatment_group, user_name=user_name)
             self._sessions[session_id] = session
 
         # start outside the lock since it may await
