@@ -67,6 +67,12 @@ class SimulationSession:
             websocket_send=self.websocket_send,
         )
 
+        # Initialize actor dynamics (chattiness, heat, affinity, tunables)
+        try:
+            self.actor_manager.initialize_dynamics(self.simulation_config)
+        except Exception:
+            pass
+
         # Clock task and running flag
         self.clock_task: Optional[asyncio.Task] = None
         self.running = False
@@ -101,18 +107,25 @@ class SimulationSession:
                 if self.state.is_expired():
                     await self.stop(reason="duration_expired")
                     break
+                # Apply per-tick actor updates (heat decay, etc.)
+                try:
+                    await self.actor_manager.on_tick()
+                except Exception:
+                    pass
                 #Second, trigger agent action based on user response or background post:
                 if self.state.pending_user_response:
                     # Delegate agent selection and action for a user-triggered response
                     agent = self.actor_manager.select_agent(context_type="user_response")
                     if agent:
-                        await self.actor_manager.agent_perform_action(agent, context_type="user_response")
+                        # foreground responses target the user (no agent target)
+                        await self.actor_manager.agent_perform_action(agent, context_type="user_response", target=None)
                     self.state.pending_user_response = False
 
                 elif random.random() < post_probability:
                     agent = self.actor_manager.select_agent(context_type="background")
                     if agent:
-                        await self.actor_manager.agent_perform_action(agent, context_type="background")
+                        target = self.actor_manager.select_target(agent, context_type="background")
+                        await self.actor_manager.agent_perform_action(agent, context_type="background", target=target)
 
                 await asyncio.sleep(tick_interval)
 
@@ -195,14 +208,18 @@ class SimulationSession:
             pass
 
     def _build_prompt(self, agent: Agent) -> str:
-        context_size = self.simulation_config["context_window_size"]
-        recent_messages = self.state.get_recent_messages(context_size)
-        if recent_messages:
-            context = "\n".join([f"{m.sender}: {m.content}" for m in recent_messages])
-        else:
-            context = "(No messages yet)"
+        # New signature accepts optional target and context_type when called from AgentManager
+        # Keep backward-compatible single-arg usage by allowing `agent` only and ignoring additional args.
+        def _inner(agent: Agent, target=None, context_type: str = None) -> str:
+            context_size = self.simulation_config["context_window_size"]
 
-        prompt = f"""Your name is {agent.name}. You are a member of this WhatsApp group.
+            recent_messages = self.state.get_recent_messages(context_size)
+            if recent_messages:
+                context = "\n".join([f"{m.sender}: {m.content}" for m in recent_messages])
+            else:
+                context = "(No messages yet)"
+
+            prompt = f"""Your name is {agent.name}. You are a member of this WhatsApp group.
 
 {self.experimental_config['prompt_template']}
 
@@ -211,4 +228,15 @@ Recent messages:
 
 Respond as {agent.name}. Keep it brief and natural."""
 
-        return prompt
+            # If a target agent was provided, encourage addressing them explicitly
+            if target is not None:
+                try:
+                    tname = target.name
+                    prompt = f"{prompt}\n\nAddress your response to {tname} (mention them if appropriate)."
+                except Exception:
+                    pass
+
+            return prompt
+
+        # If called with the old single-arg signature, call inner with no target
+        return _inner(agent)

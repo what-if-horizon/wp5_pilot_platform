@@ -1,17 +1,44 @@
 # simulation_settings.toml
 # Simulation configuration values used by SimulationSession.
-# - num_agents: total agents in the session (if you supply explicit agent_names this is informational)
-# - agent_names: list of agent names to instantiate
-# - messages_per_minute: expected background message rate (used to compute per-second probability)
-# - user_response_probability: probability an agent responds when a user message is posted
-# - context_window_size: how many recent messages to include in prompts
-# - session_duration_minutes: total session lifetime before expiry
-# - llm_concurrency_limit: per-process limit of concurrent LLM requests (must be a positive integer > 0)
 
-num_agents = 3
-agent_names = ["Alice", "Bob", "Charlie"]
-messages_per_minute = 5
-user_response_probability = 1
-context_window_size = 10
+
+### SESSION SETTINGS ### 
+# Reproducibility seed
+random_seed = 42
+# - session_duration_minutes: total session lifetime before expiry
 session_duration_minutes = 5
+
+### AGENT SPACE ###
+# - num_agents: total agents in the session.
+num_agents = 5
+# - agent_names: list of agent names to instantiate.
+agent_names = ["Alice", "Bob", "Charlie", "Lucy", "David"]
+
+### AGENT PACING ###
+# - messages_per_minute: background message rate (used to compute per-tick probability)
+messages_per_minute = 5
+# - user_response_probability: probability an agent responds when a user message is posted
+user_response_probability = 1 
+
+### AGENT RELATIONSHIPS ###
+#NOTES: this governs the 
+# - heat_decay: controls how quickly an agent's "heat" decays over time
+heat_decay = 0.9 
+# - heat_boost_speak: amount to boost an agent's "heat" when they speak
+heat_boost_speak = 1.0
+# - heat_boost_address: amount to boost an agent's "heat" when they are addressed
+heat_boost_address = 0.5
+# - min_weight_floor: minimum weight floor for agent selection
+min_weight_floor = 0.01
+
+### LLM PROMPTING SETTINGS ###
+# - context_window_size: how many recent messages to include in prompts
+context_window_size = 10
+# - llm_concurrency_limit: per-process limit of concurrent LLM requests (must be a positive integer > 0)
 llm_concurrency_limit = 5
+
+
+
+
+
+

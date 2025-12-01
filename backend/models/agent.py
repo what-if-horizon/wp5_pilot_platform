@@ -4,9 +4,16 @@ from dataclasses import dataclass
 # NOTE: functional placeholder for future expansion
 @dataclass
 class Agent:
-    """Represents an AI agent in the simulation."""
-    
+    """Represents an AI agent in the simulation.
+
+    New fields:
+    - chattiness: float (0.0-1.0) how often the bot initiates
+    - heat: float (dynamic, 0.0-1.0) recent conversational relevance
+    """
+
     name: str
-    
+    chattiness: float = 0.0
+    heat: float = 0.0
+
     def __repr__(self) -> str:
-        return f"Agent(name='{self.name}')"
+        return f"Agent(name='{self.name}', chattiness={self.chattiness:.2f}, heat={self.heat:.2f})"
