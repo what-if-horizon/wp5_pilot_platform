@@ -8,7 +8,7 @@ from datetime import datetime
 from models import Message, Agent, SessionState
 from utils import Logger
 from utils.config_loader import load_config
-from utils.llm_manager import LLMManager
+from utils.llm.llm_manager import LLMManager
 from actors.manager import AgentManager
 
 
@@ -16,11 +16,11 @@ class SimulationSession:
     """Core platform logic for a chatroom session.
 
     Responsibilities:
-    - ticking / opportunity structure (the "pull")
+    - manages ticking / opportunity structure (the "pull")
+    - delegates agent decisions/actions to `AgentManager` (the "push")
     - wiring platform-level config, lifecycle and websocket attachment
-    - delegating agent decisions/actions to `AgentManager` (the "push")
-    """
 
+    """
     def __init__(self, session_id: str, websocket_send: Callable, treatment_group: str, user_name: str = "user"):
         self.session_id = session_id
         # Wrap provided websocket_send so we can apply per-sender blocking rules
@@ -29,6 +29,7 @@ class SimulationSession:
         self.websocket_send = self._wrap_send(original_send)
         self.logger = Logger(session_id)
 
+        # Load experimental configs and map this session to a treatment group
         self.experimental_settings_full = load_config("config/experimental_settings.toml")
         if not (isinstance(self.experimental_settings_full, dict) and "groups" in self.experimental_settings_full):
             raise RuntimeError("experimental_settings.toml must define a top-level 'groups' table mapping treatment names to configs")
@@ -38,12 +39,15 @@ class SimulationSession:
         self.experimental_config = group_map[treatment_group]
         self.treatment_group = treatment_group
 
+        # Load simulation config and initialize LLM manager
         self.simulation_config = load_config("config/simulation_settings.toml")
         self.llm_manager = LLMManager.from_simulation_config(self.simulation_config)
 
+        # Initialize session state with agents
         agent_names = self.simulation_config["agent_names"]
         agents = [Agent(name=name) for name in agent_names]
 
+        # Create session state with all relevant info
         self.state = SessionState(
             session_id=session_id,
             agents=agents,
@@ -54,9 +58,7 @@ class SimulationSession:
             user_name=user_name,
         )
 
-        # Create the Actor manager responsible for selecting agents and performing actions.
-        # The AgentManager receives a prompt_builder callable so that prompt construction
-        # can remain with platform for now (but can be moved later).
+        # Create the agent manager to handle agent selection/action when called up by simulation ticks
         self.actor_manager = AgentManager(
             state=self.state,
             llm_manager=self.llm_manager,
@@ -65,15 +67,18 @@ class SimulationSession:
             websocket_send=self.websocket_send,
         )
 
+        # Clock task and running flag
         self.clock_task: Optional[asyncio.Task] = None
         self.running = False
 
+    # Start the session
     async def start(self) -> None:
         self.running = True
         self.logger.log_session_start(self.experimental_config, self.simulation_config, self.treatment_group)
         self.clock_task = asyncio.create_task(self._clock_loop())
         print(f"Session {self.session_id} started")
 
+    # Stop the session
     async def stop(self, reason: str = "completed") -> None:
         self.running = False
         if self.clock_task:
@@ -85,27 +90,33 @@ class SimulationSession:
         self.logger.log_session_end(reason)
         print(f"Session {self.session_id} stopped: {reason}")
 
+    # Main simulation loop (tick based) lives here
     async def _clock_loop(self) -> None:
         tick_interval = 1.0
         mpm = self.simulation_config["messages_per_minute"]
         post_probability = mpm / 60.0
 
         while self.running:
-            try:
+            try: #First, check if session expired (max. duration)
                 if self.state.is_expired():
                     await self.stop(reason="duration_expired")
                     break
-
+                #Second, trigger agent action based on user response or background post:
                 if self.state.pending_user_response:
-                    # Delegate agent decision and action to actors
-                    await self.actor_manager.decide_and_act(context_type="user_response")
+                    # Delegate agent selection and action for a user-triggered response
+                    agent = self.actor_manager.select_agent(context_type="user_response")
+                    if agent:
+                        await self.actor_manager.agent_perform_action(agent, context_type="user_response")
                     self.state.pending_user_response = False
 
                 elif random.random() < post_probability:
-                    await self.actor_manager.decide_and_act(context_type="background")
+                    agent = self.actor_manager.select_agent(context_type="background")
+                    if agent:
+                        await self.actor_manager.agent_perform_action(agent, context_type="background")
 
                 await asyncio.sleep(tick_interval)
 
+            # Handle cancellation and errors
             except asyncio.CancelledError:
                 break
             except Exception as e:

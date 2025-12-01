@@ -26,8 +26,8 @@ backend/
 ├── utils/
 │   ├── __init__.py
 │   ├── config_loader.py             # small helpers to load TOML configs
-│   ├── llm_gemini.py                # Gemini API client wrapper
-│   ├── llm_manager.py               # LLM call orchestration / retries
+│   ├── llm/llm_gemini.py            # Gemini API client wrapper
+│   ├── llm/llm_manager.py           # LLM call orchestration / retries
 │   ├── logger.py                    # JSON logging helpers
 │   ├── session_manager.py           # manage concurrent sessions
 │   └── token_manager.py             # token consumption / locking logic
