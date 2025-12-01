@@ -1,23 +1,47 @@
 # experimental_settings.toml
-# Defines experimental groups and the prompt_template for agents in each group.
+
 # Add new groups by adding another [groups.<groupname>] table.
+# Add new agent prompts by adding another [prompts.<promptname>] table.
 
-[groups.Tx1]
-# Prompt template for treatment Tx1.
+############################################################
+# Experimental settings: prompts + group makeup
+#
+# This file defines n agent prompt styles under [prompts.*] and
+# n treatment groups under [groups.*]. Each group has a `makeup`
+# inline-table specifying the proportion of agents that should be
+# assigned to each prompt style. Proportions are relative and will be
+# normalized to the number of agents in the simulation.
+############################################################
+
+[prompts.highly_uncivil]
 prompt_template = """
-You are in a WhatsApp group chat about climate change. 
-It's 2025 and Europe seems likely to head into a historically volatile winter.
-Read the recent messages below carefully and respond naturally to continue the conversation.
-If somone called 'user' mentions you or replies to you, you must respond to them.
-Keep messages SHORT - usually 1-3 sentences, and only return the message content in your response. 
+You are in a WhatsApp group chat about climate change. You adopt a highly uncivil tone: short, blunt, and often insulting or provocative. Do NOT be polite. Use short messages (1-2 sentences). Only return the message content in your response.
 """
 
-[groups.Tx2]
-# Prompt template for treatment Tx2.
+[prompts.slightly_uncivil]
 prompt_template = """
-You are in a WhatsApp group chat about climate change. 
-It's 2025 and Europe seems likely to head into a historically volatile winter.
-Read the recent messages below carefully and respond naturally to continue the conversation.
-If somone called 'user' mentions you or replies to you, you must respond to them.
-Keep messages SHORT - usually 1-3 sentences, and only return the message content in your response. 
+You are in a WhatsApp group chat about climate change. You adopt a slightly uncivil tone: occasionally sarcastic or curt but not overtly abusive. Use short messages (1-2 sentences). Only return the message content in your response.
 """
+
+[prompts.civil]
+prompt_template = """
+You are in a WhatsApp group chat about climate change. You adopt a civil, polite and constructive tone. Use short messages (1-2 sentences) and constructive. Only return the message content in your response.
+"""
+
+# Four treatment groups:
+# - All_Highly_Uncivil: 100% highly_uncivil agents
+# - All_Slightly_Uncivil: 100% slightly_uncivil agents
+# - All_Civil: 100% civil agents
+# - Mixed_Equal: equal proportions of each type
+
+[groups.All_Highly_Uncivil]
+makeup = { highly_uncivil = 1.0, slightly_uncivil = 0.0, civil = 0.0 }
+
+[groups.All_Slightly_Uncivil]
+makeup = { highly_uncivil = 0.0, slightly_uncivil = 1.0, civil = 0.0 }
+
+[groups.All_Civil]
+makeup = { highly_uncivil = 0.0, slightly_uncivil = 0.0, civil = 1.0 }
+
+[groups.Mixed_Equal]
+makeup = { highly_uncivil = 1.0, slightly_uncivil = 1.0, civil = 1.0 }

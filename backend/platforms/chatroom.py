@@ -45,7 +45,66 @@ class SimulationSession:
 
         # Initialize session state with agents
         agent_names = self.simulation_config["agent_names"]
-        agents = [Agent(name=name) for name in agent_names]
+
+        # Determine agent styles from experimental group makeup. Backward-compatible
+        # with the older `prompt_template`-per-group format: if `makeup` is not
+        # provided, assign all agents a default style and rely on the group's
+        # `prompt_template` string.
+        group_makeup = self.experimental_config.get("makeup") if isinstance(self.experimental_config, dict) else None
+
+        styles_list = []
+        if group_makeup and isinstance(group_makeup, dict):
+            # Normalise proportions for known styles
+            styles = ["highly_uncivil", "slightly_uncivil", "civil"]
+            raw = [float(group_makeup.get(s, 0.0) or 0.0) for s in styles]
+            total = sum(raw)
+            N = len(agent_names)
+            if total <= 0 or N <= 0:
+                styles_list = ["civil"] * N
+            else:
+                normalized = [r / total for r in raw]
+                prods = [normalized[i] * N for i in range(len(styles))]
+                floors = [int(p) for p in prods]
+                remainder = N - sum(floors)
+                # Distribute remaining slots by fractional part (largest first)
+                fracs = [(i, prods[i] - floors[i]) for i in range(len(styles))]
+                fracs.sort(key=lambda x: x[1], reverse=True)
+                for idx in range(remainder):
+                    floors[fracs[idx % len(fracs)][0]] += 1
+
+                # Build styles list (counts) then shuffle to randomize assignment
+                for i, cnt in enumerate(floors):
+                    styles_list.extend([styles[i]] * cnt)
+                # If rounding quirks cause mismatch, trim or pad with 'civil'
+                if len(styles_list) > N:
+                    styles_list = styles_list[:N]
+                elif len(styles_list) < N:
+                    styles_list.extend(["civil"] * (N - len(styles_list)))
+
+                # Shuffle assignments for randomized placement. Use a reproducible
+                # RNG when `random_seed` is provided in simulation_config.
+                try:
+                    seed = self.simulation_config.get("random_seed", None)
+                    if seed is not None:
+                        rng = random.Random(int(seed))
+                        rng.shuffle(styles_list)
+                    else:
+                        random.shuffle(styles_list)
+                except Exception:
+                    # If shuffling fails for any reason, keep deterministic order
+                    pass
+        else:
+            # Backward compatibility: no makeup specified -> use group's prompt_template for all
+            styles_list = ["civil"] * len(agent_names)
+
+        agents = []
+        for name, style in zip(agent_names, styles_list):
+            a = Agent(name=name)
+            try:
+                a.style = style
+            except Exception:
+                pass
+            agents.append(a)
 
         # Create session state with all relevant info
         self.state = SessionState(
@@ -207,36 +266,44 @@ class SimulationSession:
         except Exception:
             pass
 
-    def _build_prompt(self, agent: Agent) -> str:
-        # New signature accepts optional target and context_type when called from AgentManager
-        # Keep backward-compatible single-arg usage by allowing `agent` only and ignoring additional args.
-        def _inner(agent: Agent, target=None, context_type: str = None) -> str:
-            context_size = self.simulation_config["context_window_size"]
+    def _build_prompt(self, agent: Agent, target=None, context_type: str = None) -> str:
+        """Build a prompt for the given `agent`, selecting the prompt template
+        by the agent's `style` where possible. Keeps a backward-compatible
+        fallback to `self.experimental_config['prompt_template']` if present.
+        """
+        context_size = self.simulation_config["context_window_size"]
 
-            recent_messages = self.state.get_recent_messages(context_size)
-            if recent_messages:
-                context = "\n".join([f"{m.sender}: {m.content}" for m in recent_messages])
-            else:
-                context = "(No messages yet)"
+        recent_messages = self.state.get_recent_messages(context_size)
+        if recent_messages:
+            context = "\n".join([f"{m.sender}: {m.content}" for m in recent_messages])
+        else:
+            context = "(No messages yet)"
 
-            prompt = f"""Your name is {agent.name}. You are a member of this WhatsApp group.
+        # Prefer style-specific prompt templates defined in experimental_settings.toml
+        try:
+            style = getattr(agent, "style", None) or "civil"
+            prompt_template = self.experimental_settings_full.get("prompts", {}).get(style, {}).get("prompt_template")
+            if not prompt_template:
+                # Backward-compatible fallback
+                prompt_template = self.experimental_config.get("prompt_template", "")
+        except Exception:
+            prompt_template = self.experimental_config.get("prompt_template", "")
 
-{self.experimental_config['prompt_template']}
+        prompt = f"""Your name is {agent.name}. You are a member of this WhatsApp group.
+
+{prompt_template}
 
 Recent messages:
 {context}
 
 Respond as {agent.name}. Keep it brief and natural."""
 
-            # If a target agent was provided, encourage addressing them explicitly
-            if target is not None:
-                try:
-                    tname = target.name
-                    prompt = f"{prompt}\n\nAddress your response to {tname} (mention them if appropriate)."
-                except Exception:
-                    pass
+        # If a target agent was provided, encourage addressing them explicitly
+        if target is not None:
+            try:
+                tname = target.name
+                prompt = f"{prompt}\n\nAddress your response to {tname} (mention them if appropriate)."
+            except Exception:
+                pass
 
-            return prompt
-
-        # If called with the old single-arg signature, call inner with no target
-        return _inner(agent)
+        return prompt

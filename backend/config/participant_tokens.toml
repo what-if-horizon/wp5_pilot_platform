@@ -6,5 +6,7 @@
 # Tx1 = ["user0001", "user0002"]
 
 [groups]
-Tx1 = ["user0001", "user0002"]
-Tx2 = ["user0003", "user0004"]
+All_Highly_Uncivil = ["user0001", "user0002"]
+All_Slightly_Uncivil = ["user0003", "user0004"]
+All_Civil = ["user0005", "user0006"]
+Mixed_Equal = ["user0007", "user0008"]

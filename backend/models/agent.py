@@ -14,6 +14,9 @@ class Agent:
     name: str
     chattiness: float = 0.0
     heat: float = 0.0
+    # 'style' defines which prompt template this agent uses.
+    # One of: 'highly_uncivil', 'slightly_uncivil', 'civil'
+    style: str = "civil"
 
     def __repr__(self) -> str:
         return f"Agent(name='{self.name}', chattiness={self.chattiness:.2f}, heat={self.heat:.2f})"
