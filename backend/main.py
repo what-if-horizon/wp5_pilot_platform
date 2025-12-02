@@ -63,9 +63,13 @@ except Exception as e:
 # Pydantic for validation at HTTP boundary
 #NOTE: this guards against malformed requests/responses
 class SessionStartRequest(BaseModel):
-    """Request model for starting a session."""
+    """Request model for starting a session.
+
+    `username` is optional for the prototype UI which supplies only a token.
+    When omitted, the token string will be used as the display name.
+    """
     token: str  # single-use participant token (validated against config/participant_tokens.toml)
-    username: str
+    username: Optional[str] = None
 
 class SessionStartResponse(BaseModel):
     """Response model for session start."""
@@ -116,7 +120,10 @@ async def start_session(request: SessionStartRequest):
 
     # Reserve pending session with treatment group
     # Store requested username/handle to be attached to the session when websocket connects
-    await session_manager.reserve_pending(session_id, {"treatment_group": group, "user_name": request.username})
+    # If the client didn't provide a username, fall back to the token string so
+    # the frontend can start sessions by submitting only a token.
+    user_name = request.username or request.token
+    await session_manager.reserve_pending(session_id, {"treatment_group": group, "user_name": user_name})
 
     # Return session id and confirmation message
     return SessionStartResponse(

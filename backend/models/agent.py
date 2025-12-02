@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 # Represents an AI agent in the simulation.
 # NOTE: functional placeholder for future expansion
@@ -8,15 +9,20 @@ class Agent:
 
     New fields:
     - chattiness: float (0.0-1.0) how often the bot initiates
-    - heat: float (dynamic, 0.0-1.0) recent conversational relevance
+    - attention: float (dynamic, 0.0-1.0) recent conversational relevance
     """
 
     name: str
     chattiness: float = 0.0
-    heat: float = 0.0
-    # 'style' defines which prompt template this agent uses.
-    # One of: 'highly_uncivil', 'slightly_uncivil', 'civil'
-    style: str = "civil"
+    attention: float = 0.0
+    # 'prompt' defines which prompt template key this agent uses (matches a
+    # prompt name in `experimental_settings.toml` under the [prompts] table).
+    # It is intentionally generic and may be any string; if unset the
+    # platform/actor manager should fall back to group-level defaults.
+    prompt: Optional[str] = None
 
     def __repr__(self) -> str:
-        return f"Agent(name='{self.name}', chattiness={self.chattiness:.2f}, heat={self.heat:.2f})"
+        return (
+            f"Agent(name='{self.name}', chattiness={self.chattiness:.2f}, "
+            f"attention={self.attention:.2f}, prompt={self.prompt!r})"
+        )

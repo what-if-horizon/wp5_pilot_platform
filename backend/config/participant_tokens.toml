@@ -1,12 +1,11 @@
 # participant_tokens.toml
-# Single-use participant tokens grouped by treatment. Tokens are consumed and logged
-# in backend/logs/used_tokens.jsonl. Use this file to provision tokens for participants.
-# Example:
-# [groups]
-# Tx1 = ["user0001", "user0002"]
+
+# Provision single-use participant tokens, grouped by treatment, by adding them below.
+# Tokens are consumed on login and logged in backend/logs/used_tokens.jsonl. They cannot be reused.  
+# The treatement group names must match those defined in experimental_settings.toml (validated at runtime).
 
 [groups]
-All_Highly_Uncivil = ["user0001", "user0002"]
-All_Slightly_Uncivil = ["user0003", "user0004"]
-All_Civil = ["user0005", "user0006"]
-Mixed_Equal = ["user0007", "user0008"]
+maximally_uncivil = ["user0001", "user0002"]
+slightly_uncivil = ["user0003", "user0004"]
+civil = ["user0005", "user0006"]
+mixed_uncivil = ["user0007", "user0008"]

@@ -29,8 +29,8 @@ class LLMManager:
     @classmethod
     def from_simulation_config(cls, simulation_config: dict, client: Optional[object] = None):
         """Create an LLMManager from a simulation config dict (expects key `llm_concurrency_limit`)."""
-        llm_limit_raw = simulation_config.get("llm_concurrency_limit")
-        return cls(llm_limit_raw, client=client)
+        # Use direct indexing to ensure callers supply validated configs (no fallback)
+        return cls(simulation_config["llm_concurrency_limit"], client=client)
 
     async def generate_response(self, prompt: str, max_retries: int = 1) -> Optional[str]:
         """Acquire concurrency slot and delegate to the LLM client's async generator.

@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 
+// Backend base URL can be overridden at build/runtime via NEXT_PUBLIC_BACKEND_BASE.
+// Fallback to localhost:8000 for development if not set.
+const API_BASE = (process.env.NEXT_PUBLIC_BACKEND_BASE as string) || 'http://localhost:8000'
+const WS_BASE = API_BASE.replace(/^http/, 'ws')
+
 interface Message {
   sender: string
   content: string
@@ -18,6 +23,7 @@ interface Message {
 export default function ChatPage() {
   // State
   const [token, setToken] = useState('')
+  const [username, setUsername] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
@@ -76,7 +82,7 @@ export default function ChatPage() {
 
     const connect = () => {
       if (!mounted) return
-      const ws = new WebSocket(`ws://localhost:8000/ws/${sessionId}`)
+      const ws = new WebSocket(`${WS_BASE}/ws/${sessionId}`)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -161,10 +167,10 @@ export default function ChatPage() {
   // Start session
   const handleStartSession = async () => {
     try {
-      const response = await fetch('http://localhost:8000/session/start', {
+      const response = await fetch(`${API_BASE}/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, username }),
       })
 
       if (!response.ok) {
@@ -174,11 +180,13 @@ export default function ChatPage() {
 
       const data = await response.json()
       setSessionId(data.session_id)
-      // Use the entered token as a simple client identifier for likes
-      setCurrentUser(token || 'user')
+      // Use the provided username if present, otherwise fall back to the token
+      setCurrentUser(username || token || 'user')
       // persist session id so reloads reconnect automatically
       try {
         localStorage.setItem('wp5_session_id', data.session_id)
+        // persist chosen display name for convenience
+        if (username) localStorage.setItem('wp5_username', username)
       } catch (e) {
         // ignore localStorage errors
       }
@@ -194,6 +202,8 @@ export default function ChatPage() {
       const saved = localStorage.getItem('wp5_session_id')
       if (saved) setSessionId(saved)
       const blocked = localStorage.getItem('wp5_blocked_senders')
+      const savedName = localStorage.getItem('wp5_username')
+      if (savedName) setUsername(savedName)
       if (blocked) {
         try {
           setBlockedSenders(JSON.parse(blocked) as Record<string, string>)
@@ -273,7 +283,7 @@ export default function ChatPage() {
     }
 
     try {
-      const res = await fetch(`http://localhost:8000/session/${sessionId}/message/${messageId}/report`, {
+      const res = await fetch(`${API_BASE}/session/${sessionId}/message/${messageId}/report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: uid, block }),
@@ -322,10 +332,18 @@ export default function ChatPage() {
           <h1 style={styles.title}>Enter Token</h1>
           <input
             type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleStartSession()}
+            placeholder="Optional display name (e.g. Alice)"
+            style={{ ...styles.input, marginBottom: '0.5rem' }}
+          />
+          <input
+            type="text"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleStartSession()}
-            placeholder="Enter token (1234)"
+            placeholder="Enter token (e.g. user0002)"
             style={styles.input}
           />
           <button onClick={handleStartSession} style={styles.button}>
@@ -417,7 +435,7 @@ export default function ChatPage() {
                   )
 
                   try {
-                    const res = await fetch(`http://localhost:8000/session/${sessionId}/message/${msg.message_id}/like`, {
+                    const res = await fetch(`${API_BASE}/session/${sessionId}/message/${msg.message_id}/like`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ user: uid }),

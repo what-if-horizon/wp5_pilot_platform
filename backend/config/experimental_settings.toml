@@ -1,18 +1,15 @@
 # experimental_settings.toml
 
-# Add new groups by adding another [groups.<groupname>] table.
+############################################################
+# Treatement Group Specification 
+
+# This file defines n agent prompt templates under [prompts.*] and n treatment groups under [groups.*]. 
+# Each group has a `makeup` inline-table specifying the proportion of agents that should be assigned to each prompt template. 
+# Proportions are relative and will be normalized to the number of agents in the simulation.
+############################################################
+
+
 # Add new agent prompts by adding another [prompts.<promptname>] table.
-
-############################################################
-# Experimental settings: prompts + group makeup
-#
-# This file defines n agent prompt styles under [prompts.*] and
-# n treatment groups under [groups.*]. Each group has a `makeup`
-# inline-table specifying the proportion of agents that should be
-# assigned to each prompt style. Proportions are relative and will be
-# normalized to the number of agents in the simulation.
-############################################################
-
 [prompts.highly_uncivil]
 prompt_template = """
 You are in a WhatsApp group chat about climate change. You adopt a highly uncivil tone: short, blunt, and often insulting or provocative. Do NOT be polite. Use short messages (1-2 sentences). Only return the message content in your response.
@@ -28,20 +25,16 @@ prompt_template = """
 You are in a WhatsApp group chat about climate change. You adopt a civil, polite and constructive tone. Use short messages (1-2 sentences) and constructive. Only return the message content in your response.
 """
 
-# Four treatment groups:
-# - All_Highly_Uncivil: 100% highly_uncivil agents
-# - All_Slightly_Uncivil: 100% slightly_uncivil agents
-# - All_Civil: 100% civil agents
-# - Mixed_Equal: equal proportions of each type
 
-[groups.All_Highly_Uncivil]
+# Add new groups by adding another [groups.<groupname>] table.
+[groups.maximally_uncivil]
 makeup = { highly_uncivil = 1.0, slightly_uncivil = 0.0, civil = 0.0 }
 
-[groups.All_Slightly_Uncivil]
+[groups.slightly_uncivil]
 makeup = { highly_uncivil = 0.0, slightly_uncivil = 1.0, civil = 0.0 }
 
-[groups.All_Civil]
+[groups.civil]
 makeup = { highly_uncivil = 0.0, slightly_uncivil = 0.0, civil = 1.0 }
 
-[groups.Mixed_Equal]
+[groups.mixed_uncivil]
 makeup = { highly_uncivil = 1.0, slightly_uncivil = 1.0, civil = 1.0 }
