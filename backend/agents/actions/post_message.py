@@ -55,8 +55,15 @@ async def post_message_action(manager, agent, context_type: str, target: Optiona
 
         prompt = f"{prompt_template}\n\nRecent messages:\n{context}\n\nRespond as {agent.name}. Keep it brief and natural."
 
-        # If a target agent was provided, encourage addressing them explicitly
-        if target is not None:
+        # For foreground (user response), instruct agent to address the user
+        if context_type == "foreground":
+            try:
+                user_name = getattr(manager.state, "user_name", "user")
+                prompt = f"{prompt}\n\nAddress your response to {user_name}."
+            except Exception:
+                pass
+        # For background posts with a target agent, encourage addressing them
+        elif target is not None:
             try:
                 tname = target.name
                 prompt = f"{prompt}\n\nAddress your response to {tname} (mention them if appropriate)."

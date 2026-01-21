@@ -47,7 +47,7 @@ class AgentManager:
 
     # Initialize agent dynamics (gets from from SimulationSession)
     def assign_agent_dynamics(self, simulation_config: dict) -> None:
-        """Initialize chattiness, attention and affinity matrix from simulation_config or random defaults."""
+        """Initialize chattiness and attention from simulation_config or random defaults."""
         self.attention_decay = float(simulation_config["attention_decay"])
         self.attention_boost_speak = float(simulation_config["attention_boost_speak"])
         self.attention_boost_address = float(simulation_config["attention_boost_address"])
@@ -69,23 +69,8 @@ class AgentManager:
             except Exception:
                 a.attention = 0.0
 
-        # Initialize affinity matrix (ordered pairs). Use provided map or random
-        affinity_cfg = simulation_config.get("affinity", {}) or {}
-        self.affinity = {}
-        names = [a.name for a in self.state.agents]
-        for src in names:
-            self.affinity[src] = {}
-            for tgt in names:
-                if src == tgt:
-                    self.affinity[src][tgt] = 0.0
-                else:
-                    if src in affinity_cfg and tgt in affinity_cfg.get(src, {}):
-                        try:
-                            self.affinity[src][tgt] = float(affinity_cfg[src][tgt])
-                        except Exception:
-                            self.affinity[src][tgt] = float(self._rng.random())
-                    else:
-                        self.affinity[src][tgt] = float(self._rng.random())
+        # Affinity removed: target selection uses chattiness and attention only.
+        # Target selection now uses agent chattiness and attention only.
 
     async def on_tick(self) -> None:
         """Called once per simulation tick to apply attention decay."""
@@ -282,10 +267,10 @@ class AgentManager:
         return self._weighted_choice(names, weights)
     
     def select_target(self, speaker, context_type: str):
-        """Select a target agent for a speaker using affinity and target attention.
+        """Select a target agent for a speaker using chattiness and attention.
 
         For background posts, uses:
-            weight(target) = affinity[speaker][target] * (1 + target.attention)
+            weight(target) = target.chattiness * (1 + target.attention)
         Excludes speaker from choices. Returns an Agent or None if no valid target.
         """
         if not speaker or not self.state.agents:
@@ -295,15 +280,13 @@ class AgentManager:
         if not names:
             return None
 
-        weights = []
-        for tgt in names:
-            aff = 0.0
-            try:
-                aff = float(self.affinity.get(speaker.name, {}).get(tgt.name, 0.0))
-            except Exception:
-                aff = 0.0
-            w = max(self.min_weight_floor, aff * (1.0 + float(getattr(tgt, "attention", 0.0))))
-            weights.append(w)
+        weights = [
+            max(
+                self.min_weight_floor,
+                float(getattr(tgt, "chattiness", 0.0)) * (1.0 + float(getattr(tgt, "attention", 0.0)))
+            )
+            for tgt in names
+        ]
 
         return self._weighted_choice(names, weights)
     

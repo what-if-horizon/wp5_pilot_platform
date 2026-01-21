@@ -1,7 +1,25 @@
 import asyncio
 from typing import Optional
 
-from . import llm_gemini
+from .llm_gemini import GeminiClient
+from .llm_huggingface import HuggingFaceClient
+
+
+def _create_client_from_config(simulation_config: dict):
+    """Create the appropriate LLM client based on simulation config."""
+    provider = simulation_config.get("llm_provider", "gemini").lower()
+    model = simulation_config.get("llm_model")
+
+    if provider == "huggingface":
+        if model:
+            return HuggingFaceClient(model_name=model)
+        return HuggingFaceClient()
+    elif provider == "gemini":
+        if model:
+            return GeminiClient(model_name=model)
+        return GeminiClient()
+    else:
+        raise RuntimeError(f"Unknown llm_provider: '{provider}'. Supported: 'gemini', 'huggingface'")
 
 
 class LLMManager:
@@ -9,7 +27,7 @@ class LLMManager:
 
     Responsibilities:
     - maintain an asyncio.Semaphore sized by the configured concurrency limit
-    - delegate actual LLM calls to an injected client (default: gemini_client)
+    - delegate actual LLM calls to an injected client (selected based on config)
     """
 
     def __init__(self, concurrency_limit: int, client: Optional[object] = None):
@@ -24,12 +42,17 @@ class LLMManager:
 
         self._semaphore = asyncio.Semaphore(limit)
         # LLM client should provide `generate_response_async(prompt, max_retries)`
-        self.client = client or llm_gemini.gemini_client
+        self.client = client
 
     @classmethod
     def from_simulation_config(cls, simulation_config: dict, client: Optional[object] = None):
-        """Create an LLMManager from a simulation config dict (expects key `llm_concurrency_limit`)."""
-        # Use direct indexing to ensure callers supply validated configs (no fallback)
+        """Create an LLMManager from a simulation config dict.
+
+        Expects keys: `llm_concurrency_limit`, and optionally `llm_provider` and `llm_model`.
+        If no client is provided, one is created based on `llm_provider` (default: gemini).
+        """
+        if client is None:
+            client = _create_client_from_config(simulation_config)
         return cls(simulation_config["llm_concurrency_limit"], client=client)
 
     async def generate_response(self, prompt: str, max_retries: int = 1) -> Optional[str]:

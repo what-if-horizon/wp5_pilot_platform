@@ -76,7 +76,7 @@ class SimulationSession:
         )
 
         # Initialize agent dynamics based on experimental configs 
-        # e.g., chattiness, attention, affinity
+        # e.g., chattiness and attention
         self.agent_manager.assign_agent_dynamics(self.simulation_config)
    
         # Assign agent prompt keys/makeup based on experimental configs.

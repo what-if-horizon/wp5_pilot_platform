@@ -21,18 +21,34 @@ messages_per_minute = 5
 user_response_probability = 1 
 
 ### AGENT RELATIONSHIPS ###
-# - each agent starts with a randomized 'chattiness' score between 0 and 1, which is used to weight their likelihood of being selected to speak.
-# - this is modulated by their 'attention' score, which starts at zero, increases when they speak or are addressed, and decays over time.
-# - attention_decay: controls how quickly an agent's "attention" decays over time (float between 0 and 1)
-attention_decay = 0.9 
-# - attention_boost_speak: amount to boost an agent's "attention" when they speak (float between 0 and 1)
-attention_boost_speak = 1.0
-# - attention_boost_address: amount to boost an agent's "attention" when they are addressed (float between 0 and 1)
-attention_boost_address = 0.5
-# - min_weight_floor: minimum weight floor for agent selection (float between 0 and 1)
-min_weight_floor = 0.01
+# Each agent's chance of speaking = chattiness × (1 + attention)
+# - chattiness: random 0-1 value assigned at session start (permanent personality trait)
+# - attention: dynamic 0-1 value that rises when active and decays over time
+#
+# attention_decay (0-1): multiplied each tick.
+#   → Higher = attention persists longer, active agents stay dominant
+#   → Lower = faster cooldown, more rotation between agents
+attention_decay = 0.7
+# attention_boost_speak (0-1): set attention to this value when agent speaks.
+#   → Higher = speakers stay "hot" and likely to speak again
+#   → Lower = speaking doesn't strongly favor continued speaking
+attention_boost_speak = 0.5
+# attention_boost_address (0-1): added to attention when agent is @mentioned.
+#   → Higher = mentioned agents more likely to jump in and respond
+#   → Lower = mentions have less pull on conversation flow
+attention_boost_address = 0.3
+# min_weight_floor (0-1): minimum selection weight for any agent.
+#   → Higher = more equal participation, quiet agents still speak
+#   → Lower = lets natural dominance emerge, some agents may go silent
+min_weight_floor = 0.20
 
-### LLM PROMPTING SETTINGS ###
+### LLM SETTINGS ###
+# - llm_provider: which LLM provider to use ("gemini" or "huggingface")
+llm_provider = "huggingface"
+# - llm_model: model name/identifier for the chosen provider
+#   For gemini: e.g., "gemini-2.0-flash"
+#   For huggingface: e.g., "meta-llama/Llama-3.1-8B-Instruct"
+llm_model = "meta-llama/Llama-3.1-8B-Instruct"
 # - context_window_size: how many recent messages to include in prompts (int)
 context_window_size = 10
 # - llm_concurrency_limit: per-process limit of concurrent LLM requests (must be a positive integer > 0)
