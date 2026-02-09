@@ -1,11 +1,10 @@
 import asyncio
 import re
-from typing import Optional
 
 from models import Message
 
 
-async def post_message_action(manager, agent, context_type: str, target: Optional[object] = None) -> None:
+async def post_message_action(manager, agent, context_type: str) -> None:
     """Action: produce and send a message on behalf of `agent`.
 
     This function is intentionally written to be minimal in terms of required
@@ -20,7 +19,7 @@ async def post_message_action(manager, agent, context_type: str, target: Optiona
 
     # Build prompt (deterministic): always use the local builder moved
     # here from AgentManager. No fallbacks or manager-provided builders.
-    def _local_build_prompt(manager, agent, target=None, context_type: str = None) -> str:
+    def _local_build_prompt(manager, agent, context_type: str = None) -> str:
         # Use the validated simulation_config attached to the manager
         simulation_config = getattr(manager, "simulation_config", {}) or {}
         try:
@@ -53,7 +52,11 @@ async def post_message_action(manager, agent, context_type: str, target: Optiona
             except Exception:
                 prompt_template = ""
 
-        prompt = f"{prompt_template}\n\nRecent messages:\n{context}\n\nRespond as {agent.name}. Keep it brief and natural."
+        # Replace @name placeholder with the agent's actual name
+        if prompt_template:
+            prompt_template = prompt_template.replace("@name", agent.name)
+
+        prompt = f"{prompt_template}\n\nRecent messages:\n{context}"
 
         # For foreground (user response), instruct agent to address the user
         if context_type == "foreground":
@@ -62,17 +65,10 @@ async def post_message_action(manager, agent, context_type: str, target: Optiona
                 prompt = f"{prompt}\n\nAddress your response to {user_name}."
             except Exception:
                 pass
-        # For background posts with a target agent, encourage addressing them
-        elif target is not None:
-            try:
-                tname = target.name
-                prompt = f"{prompt}\n\nAddress your response to {tname} (mention them if appropriate)."
-            except Exception:
-                pass
 
         return prompt
 
-    prompt = _local_build_prompt(manager, agent, target, context_type)
+    prompt = _local_build_prompt(manager, agent, context_type)
 
     response_text = None
     try:
@@ -103,11 +99,11 @@ async def post_message_action(manager, agent, context_type: str, target: Optiona
     # and background posts.
     try:
         try:
-            wpm = 40.0
+            wpm = 100.0
             chars_per_word = 5.0
             per_char = 60.0 / (wpm * chars_per_word)
             min_delay = 0.5
-            max_delay = 30.0
+            max_delay = 15.0
             content_len = len(response_text or "")
             delay = min(max(min_delay, content_len * per_char), max_delay)
         except Exception:
@@ -134,7 +130,7 @@ async def post_message_action(manager, agent, context_type: str, target: Optiona
                 if key in agent_name_map and agent_name_map[key] not in mentions:
                     mentions.append(agent_name_map[key])
 
-    # Boost attention for mentioned targets
+    # Boost attention for mentioned agents
     if mentions:
         for nm in mentions:
             tgt = next((a for a in manager.state.agents if a.name == nm), None)
@@ -143,28 +139,6 @@ async def post_message_action(manager, agent, context_type: str, target: Optiona
                     tgt.attention = min(1.0, float(getattr(tgt, "attention", 0.0)) + manager.attention_boost_address)
                 except Exception:
                     tgt.attention = min(1.0, manager.attention_boost_address)
-
-    # If we had selected a target but LLM didn't mention them, enforce for background posts
-    if target and isinstance(target, object):
-        try:
-            target_name = getattr(target, "name", None)
-        except Exception:
-            target_name = None
-        if target_name and target_name not in (mentions or []):
-            if context_type == "background":
-                if mentions is None:
-                    mentions = [target_name]
-                else:
-                    mentions.append(target_name)
-                try:
-                    tgt = next((a for a in manager.state.agents if a.name == target_name), None)
-                    if tgt:
-                        try:
-                            tgt.attention = min(1.0, float(getattr(tgt, "attention", 0.0)) + manager.attention_boost_address)
-                        except Exception:
-                            tgt.attention = min(1.0, manager.attention_boost_address)
-                except Exception:
-                    pass
 
     # Persist message
     message = Message.create(sender=agent.name, content=response_text, mentions=mentions or None)

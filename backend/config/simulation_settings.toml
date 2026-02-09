@@ -28,7 +28,7 @@ user_response_probability = 1
 # attention_decay (0-1): multiplied each tick.
 #   → Higher = attention persists longer, active agents stay dominant
 #   → Lower = faster cooldown, more rotation between agents
-attention_decay = 0.7
+attention_decay = 0.5
 # attention_boost_speak (0-1): set attention to this value when agent speaks.
 #   → Higher = speakers stay "hot" and likely to speak again
 #   → Lower = speaking doesn't strongly favor continued speaking
@@ -36,7 +36,7 @@ attention_boost_speak = 0.5
 # attention_boost_address (0-1): added to attention when agent is @mentioned.
 #   → Higher = mentioned agents more likely to jump in and respond
 #   → Lower = mentions have less pull on conversation flow
-attention_boost_address = 0.3
+attention_boost_address = 0.8
 # min_weight_floor (0-1): minimum selection weight for any agent.
 #   → Higher = more equal participation, quiet agents still speak
 #   → Lower = lets natural dominance emerge, some agents may go silent

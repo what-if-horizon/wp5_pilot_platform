@@ -126,16 +126,14 @@ class SimulationSession:
                     # Delegate agent selection and action for a user-triggered (foreground) response
                     agent = self.agent_manager.select_agent(context_type="foreground")
                     if agent:
-                        # foreground responses target the user (no agent target)
-                        await self.agent_manager.agent_post_message(agent, context_type="foreground", target=None)
+                        await self.agent_manager.agent_post_message(agent, context_type="foreground")
                     self.state.pending_user_response = False
 
                 # Fourth, create background posts based on post_probability:
                 elif self._rng.random() < post_probability:
                     agent = self.agent_manager.select_agent(context_type="background")
                     if agent:
-                        target = self.agent_manager.select_target(agent, context_type="background")
-                        await self.agent_manager.agent_post_message(agent, context_type="background", target=target)
+                        await self.agent_manager.agent_post_message(agent, context_type="background")
 
                 await asyncio.sleep(tick_interval)
 

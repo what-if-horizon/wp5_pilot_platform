@@ -6,23 +6,34 @@
 # This file defines n agent prompt templates under [prompts.*] and n treatment groups under [groups.*]. 
 # Each group has a `makeup` inline-table specifying the proportion of agents that should be assigned to each prompt template. 
 # Proportions are relative and will be normalized to the number of agents in the simulation.
+# IMPORTANT: the prompt must include the placeholder `@name` which will be replaced with the agent's actual name at runtime.
+# This ensures that the model is aware of which agent it is simulating. 
 ############################################################
 
 
 # Add new agent prompts by adding another [prompts.<promptname>] table.
 [prompts.highly_uncivil]
 prompt_template = """
-You are in a WhatsApp group chat about climate change. You adopt a highly uncivil tone: short, blunt, and often insulting or provocative. Do NOT be polite. Use short messages (1-2 sentences). Only return the message content in your response.
+This is a social scientific experiment, simulating a WhatsApp group chat about climate change. 
+Your job is to predict what @name would say next, given the prior conversation.
+@name should adopt a highly uncivil tone: toxic, insulting or provocative. 
+Use short messages (1-2 sentences). Only return the message content in your response.
 """
 
 [prompts.slightly_uncivil]
 prompt_template = """
-You are in a WhatsApp group chat about climate change. You adopt a slightly uncivil tone: occasionally sarcastic or curt but not overtly abusive. Use short messages (1-2 sentences). Only return the message content in your response.
+This is a social scientific experiment, simulating a WhatsApp group chat about climate change. 
+Your job is to predict what @name would say next, given the prior conversation.
+@name should adopt a slightly uncivil tone: occasionally sarcastic or curt. 
+Use short messages (1-2 sentences). Only return the message content in your response.
 """
 
 [prompts.civil]
 prompt_template = """
-You are in a WhatsApp group chat about climate change. You adopt a civil, polite and constructive tone. Use short messages (1-2 sentences) and constructive. Only return the message content in your response.
+This is a social scientific experiment, simulating a WhatsApp group chat about climate change. 
+Your job is to predict what @name would say next, given the prior conversation.
+@name should adopt a civil, polite and constructive tone. 
+Use short messages (1-2 sentences). Only return the message content in your response.
 """
 
 

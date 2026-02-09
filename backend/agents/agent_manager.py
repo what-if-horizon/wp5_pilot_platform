@@ -69,8 +69,6 @@ class AgentManager:
             except Exception:
                 a.attention = 0.0
 
-        # Affinity removed: target selection uses chattiness and attention only.
-        # Target selection now uses agent chattiness and attention only.
 
     async def on_tick(self) -> None:
         """Called once per simulation tick to apply attention decay."""
@@ -266,30 +264,6 @@ class AgentManager:
         weights = [max(self.min_weight_floor, a.chattiness * (1.0 + float(getattr(a, "attention", 0.0)))) for a in names]
         return self._weighted_choice(names, weights)
     
-    def select_target(self, speaker, context_type: str):
-        """Select a target agent for a speaker using chattiness and attention.
-
-        For background posts, uses:
-            weight(target) = target.chattiness * (1 + target.attention)
-        Excludes speaker from choices. Returns an Agent or None if no valid target.
-        """
-        if not speaker or not self.state.agents:
-            return None
-
-        names = [a for a in self.state.agents if a.name != speaker.name]
-        if not names:
-            return None
-
-        weights = [
-            max(
-                self.min_weight_floor,
-                float(getattr(tgt, "chattiness", 0.0)) * (1.0 + float(getattr(tgt, "attention", 0.0)))
-            )
-            for tgt in names
-        ]
-
-        return self._weighted_choice(names, weights)
-    
-    async def agent_post_message(self, agent, context_type: str, target=None) -> None:
+    async def agent_post_message(self, agent, context_type: str) -> None:
         """Delegate posting to the actions module (keeps AgentManager focused)."""
-        return await post_message_action(self, agent, context_type, target)
+        return await post_message_action(self, agent, context_type)
