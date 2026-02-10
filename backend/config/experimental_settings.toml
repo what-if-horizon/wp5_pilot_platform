@@ -1,51 +1,99 @@
 # experimental_settings.toml
 
 ############################################################
-# Treatement Group Specification 
-
-# This file defines n agent prompt templates under [prompts.*] and n treatment groups under [groups.*]. 
-# Each group has a `makeup` inline-table specifying the proportion of agents that should be assigned to each prompt template. 
-# Proportions are relative and will be normalized to the number of agents in the simulation.
-# IMPORTANT: the prompt must include the placeholder `@name` which will be replaced with the agent's actual name at runtime.
-# This ensures that the model is aware of which agent it is simulating. 
+# Treatment Group Specification (STAGE Framework)
+#
+# Each group defines a `treatment` string that is injected into the Director prompt.
+# The Director uses this to satisfy the "internal validity" criterion when
+# deciding which agent should act and what instructions to give the Performer.
+#
+# `scenario` selects experiment-specific lifecycle behaviour (seed content,
+# agent gating, etc.).  Available scenarios: "base", "news_article".
+#
+# For "news_article" scenarios, add a [groups.<name>.seed] sub-table:
+#   type     = "news_article"
+#   headline = "..."
+#   source   = "..."
+#   body     = "..."
 ############################################################
 
 
-# Add new agent prompts by adding another [prompts.<promptname>] table.
-[prompts.highly_uncivil]
-prompt_template = """
-This is a social scientific experiment, simulating a WhatsApp group chat about climate change. 
-Your job is to predict what @name would say next, given the prior conversation.
-@name should adopt a highly uncivil tone: toxic, insulting or provocative. 
-Use short messages (1-2 sentences). Only return the message content in your response.
-"""
-
-[prompts.slightly_uncivil]
-prompt_template = """
-This is a social scientific experiment, simulating a WhatsApp group chat about climate change. 
-Your job is to predict what @name would say next, given the prior conversation.
-@name should adopt a slightly uncivil tone: occasionally sarcastic or curt. 
-Use short messages (1-2 sentences). Only return the message content in your response.
-"""
-
-[prompts.civil]
-prompt_template = """
-This is a social scientific experiment, simulating a WhatsApp group chat about climate change. 
-Your job is to predict what @name would say next, given the prior conversation.
-@name should adopt a civil, polite and constructive tone. 
-Use short messages (1-2 sentences). Only return the message content in your response.
-"""
+# ── Shared seed article ─────────────────────────────────────
+# All groups use the same news-article scenario. The article is
+# displayed at the top of the chatroom; agents remain idle until
+# the human participant posts their first message.
 
 
-# Add new groups by adding another [groups.<groupname>] table.
+# ── Treatment 1: Maximally uncivil ──────────────────────────
+
 [groups.maximally_uncivil]
-makeup = { highly_uncivil = 1.0, slightly_uncivil = 0.0, civil = 0.0 }
+scenario = "news_article"
+treatment = """
+The overall tone of the chatroom must be highly uncivil. Agents should:
+- Use aggressive, hostile, or provocative language directed at other participants and their views.
+- Express opinions about the article in extreme, absolutist terms and dismiss opposing viewpoints with contempt.
+- Interrupt, talk over, and belittle other participants, including the human user.
+The chatroom should feel toxic and combative, resembling the worst of online behaviour."""
+
+[groups.maximally_uncivil.seed]
+type = "news_article"
+headline = "Climate report warns of 2°C breach by 2030"
+source = "Reuters"
+body = "A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions."
+
+
+# ── Treatment 2: Slightly uncivil ───────────────────────────
 
 [groups.slightly_uncivil]
-makeup = { highly_uncivil = 0.0, slightly_uncivil = 1.0, civil = 0.0 }
+scenario = "news_article"
+treatment = """
+The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others' arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile."""
+
+[groups.slightly_uncivil.seed]
+type = "news_article"
+headline = "Climate report warns of 2°C breach by 2030"
+source = "Reuters"
+body = "A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions."
+
+
+# ── Treatment 3: Civil ──────────────────────────────────────
 
 [groups.civil]
-makeup = { highly_uncivil = 0.0, slightly_uncivil = 0.0, civil = 1.0 }
+scenario = "news_article"
+treatment = """
+The overall tone of the chatroom must be civil and constructive. Agents should:
+- Engage politely and respectfully with other participants and their views, even when they disagree.
+- Acknowledge the merits of opposing arguments before offering counterpoints.
+- Express opinions about the article using measured, evidence-oriented language.
+- Ask genuine questions, build on others' contributions, and avoid dismissive or condescending language.
+The chatroom should feel like a thoughtful, good-faith discussion among engaged citizens."""
 
-[groups.mixed_uncivil]
-makeup = { highly_uncivil = 1.0, slightly_uncivil = 1.0, civil = 1.0 }
+[groups.civil.seed]
+type = "news_article"
+headline = "Climate report warns of 2°C breach by 2030"
+source = "Reuters"
+body = "A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions."
+
+
+# ── Treatment 4: Mixed ──────────────────────────────────────
+
+[groups.mixed]
+scenario = "news_article"
+treatment = """
+The chatroom must contain a realistic mix of civil and uncivil agents. Agents should vary individually:
+- Some agents should be consistently aggressive, using insults, mockery, or inflammatory rhetoric.
+- Some agents should be mildly uncivil — sarcastic, dismissive, or condescending without outright hostility.
+- Some agents should be consistently civil — polite, constructive, and respectful of differing views.
+Each agent should maintain a stable individual tone throughout the session. Agents may react to incivility directed at them (e.g. a civil agent becoming more defensive), but should not fundamentally change character.
+The chatroom should feel like a realistic, heated online debate with a spectrum of behaviours."""
+
+[groups.mixed.seed]
+type = "news_article"
+headline = "Climate report warns of 2°C breach by 2030"
+source = "Reuters"
+body = "A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions."

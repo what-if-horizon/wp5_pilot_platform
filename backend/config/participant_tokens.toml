@@ -5,7 +5,7 @@
 # The treatement group names must match those defined in experimental_settings.toml (validated at runtime).
 
 [groups]
-maximally_uncivil = ["user0001", "user0002"]
-slightly_uncivil = ["user0003", "user0004"]
-civil = ["user0005", "user0006"]
-mixed_uncivil = ["user0007", "user0008"]
+maximally_uncivil = ["user0001"]
+slightly_uncivil = ["user0002"]
+civil = ["user0003"]
+mixed = ["user0004"]

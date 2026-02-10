@@ -2,60 +2,38 @@
 # Simulation configuration values used by SimulationSession.
 
 
-### SESSION SETTINGS ### 
-# Reproducibility seed 
+### SESSION SETTINGS ###
+# Reproducibility seed
 random_seed = 42
 # - session_duration_minutes: max. duration of the simulation session in minutes
-session_duration_minutes = 5
+session_duration_minutes = 2
 
 ### AGENT SPACE ###
 # - num_agents: total agents in the session (int)
-num_agents = 5 
-# - agent_names: corresponding list of agent names to instantiate (list of strings, length must match num_agents). 
-agent_names = ["Alice", "Bob", "Charlie", "Lucy", "David"] 
+num_agents = 5
+# - agent_names: corresponding list of agent names to instantiate (list of strings, length must match num_agents).
+agent_names = ["Alice", "Bob", "Charlie", "Lucy", "David"]
 
 ### AGENT PACING ###
 # - messages_per_minute: background message rate (int)
-messages_per_minute = 5
-# - user_response_probability: probability an agent responds when a user message is posted (float between 0 and 1)
-user_response_probability = 1 
+messages_per_minute = 10
+# - typing_delay_seconds: fixed delay before posting a message, simulates typing (float, 0 to disable)
+typing_delay_seconds = 1.0
 
-### AGENT RELATIONSHIPS ###
-# Each agent's chance of speaking = chattiness × (1 + attention)
-# - chattiness: random 0-1 value assigned at session start (permanent personality trait)
-# - attention: dynamic 0-1 value that rises when active and decays over time
-#
-# attention_decay (0-1): multiplied each tick.
-#   → Higher = attention persists longer, active agents stay dominant
-#   → Lower = faster cooldown, more rotation between agents
-attention_decay = 0.5
-# attention_boost_speak (0-1): set attention to this value when agent speaks.
-#   → Higher = speakers stay "hot" and likely to speak again
-#   → Lower = speaking doesn't strongly favor continued speaking
-attention_boost_speak = 0.5
-# attention_boost_address (0-1): added to attention when agent is @mentioned.
-#   → Higher = mentioned agents more likely to jump in and respond
-#   → Lower = mentions have less pull on conversation flow
-attention_boost_address = 0.8
-# min_weight_floor (0-1): minimum selection weight for any agent.
-#   → Higher = more equal participation, quiet agents still speak
-#   → Lower = lets natural dominance emerge, some agents may go silent
-min_weight_floor = 0.20
+### DIRECTOR LLM SETTINGS ###
+# The Director is a large reasoning model that decides which agent acts,
+# selects the action type, and provides structured instructions to the Performer.
+director_llm_provider = "anthropic"
+director_llm_model = "claude-sonnet-4-5"
 
-### LLM SETTINGS ###
-# - llm_provider: which LLM provider to use ("gemini" or "huggingface")
-llm_provider = "huggingface"
-# - llm_model: model name/identifier for the chosen provider
-#   For gemini: e.g., "gemini-2.0-flash"
-#   For huggingface: e.g., "meta-llama/Llama-3.1-8B-Instruct"
-llm_model = "meta-llama/Llama-3.1-8B-Instruct"
+### PERFORMER LLM SETTINGS ###
+# The Performer is a fine-tuned instruction model that generates the actual
+# chatroom message based on the Director's instructions.
+performer_llm_provider = "huggingface"
+performer_llm_model = "meta-llama/Llama-3.1-8B-Instruct"
+
+### SHARED LLM SETTINGS ###
 # - context_window_size: how many recent messages to include in prompts (int)
-context_window_size = 10
+context_window_size = 15
 # - llm_concurrency_limit: per-process limit of concurrent LLM requests (must be a positive integer > 0)
 llm_concurrency_limit = 5
-
-
-
-
-
-

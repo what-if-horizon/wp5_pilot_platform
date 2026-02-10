@@ -15,7 +15,6 @@ class SessionState:
     messages: List[Message] = field(default_factory=list)
     start_time: datetime = field(default_factory=datetime.now)
     duration_minutes: int = 15
-    pending_user_response: bool = False
     # Identifier for the human participant in this session (default 'user')
     user_name: str = "user"
     experimental_config: dict = field(default_factory=dict)

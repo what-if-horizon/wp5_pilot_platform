@@ -52,33 +52,20 @@ def validate_sim_config(path: str) -> dict:
         if k not in cfg:
             raise ValueError(f"simulation_settings missing required key: '{k}'")
 
-    # Required top-level keys (accept some legacy aliases which we'll normalize)
-    # Canonical keys we expect
+    # Required top-level keys for the STAGE framework
     canonical = [
         "random_seed",
         "session_duration_minutes",
         "num_agents",
         "agent_names",
         "messages_per_minute",
-        "user_response_probability",
-        "attention_decay",
-        "attention_boost_speak",
-        "attention_boost_address",
-        "min_weight_floor",
+        "director_llm_provider",
+        "director_llm_model",
+        "performer_llm_provider",
+        "performer_llm_model",
         "context_window_size",
         "llm_concurrency_limit",
     ]
-
-    # Normalize legacy aliases
-    # e.g., some configs may use 'heat_decay' instead of 'attention_decay'
-    aliases = {
-        "heat_decay": "attention_decay",
-        "heat_boost_speak": "attention_boost_speak",
-        "heat_boost_address": "attention_boost_address",
-    }
-    for old, new in aliases.items():
-        if old in cfg and new not in cfg:
-            cfg[new] = cfg[old]
 
     # Now require canonical keys exist
     for k in canonical:
@@ -115,18 +102,17 @@ def validate_sim_config(path: str) -> dict:
             raise ValueError("'messages_per_minute' must be >= 0")
         cfg["messages_per_minute"] = mpm
 
-        # user_response_probability: float 0..1
-        urp = float(cfg["user_response_probability"])
-        if not (0.0 <= urp <= 1.0):
-            raise ValueError("'user_response_probability' must be between 0 and 1")
-        cfg["user_response_probability"] = urp
+        # typing_delay_seconds: non-negative float (optional, defaults to 1.0)
+        tds = float(cfg.get("typing_delay_seconds", 1.0))
+        if tds < 0:
+            raise ValueError("'typing_delay_seconds' must be >= 0")
+        cfg["typing_delay_seconds"] = tds
 
-        # attention_decay, attention_boost_speak, attention_boost_address, min_weight_floor: floats in [0,1]
-        for key in ["attention_decay", "attention_boost_speak", "attention_boost_address", "min_weight_floor"]:
-            val = float(cfg[key])
-            if not (0.0 <= val <= 1.0):
-                raise ValueError(f"'{key}' must be between 0 and 1")
-            cfg[key] = val
+        # LLM provider/model: must be non-empty strings
+        for key in ["director_llm_provider", "director_llm_model", "performer_llm_provider", "performer_llm_model"]:
+            val = cfg[key]
+            if not isinstance(val, str) or not val.strip():
+                raise ValueError(f"'{key}' must be a non-empty string")
 
         # context_window_size: positive int
         cws = int(cfg["context_window_size"])

@@ -1,4 +1,4 @@
-# Simulacra — Prototype Frontend (WP5)
+# What-If - WP5 Pilot Platform (Frontend)
 
 NOTE: this is a small prototype frontend intended for local development and testing of the WP5 backend.
 

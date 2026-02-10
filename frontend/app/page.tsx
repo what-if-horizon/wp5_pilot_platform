@@ -18,6 +18,11 @@ interface Message {
   likes_count?: number
   liked_by?: string[]
   reported?: boolean
+  // Scenario seed messages (e.g. news articles)
+  msg_type?: string
+  headline?: string
+  source?: string
+  body?: string
 }
 
 export default function ChatPage() {
@@ -49,7 +54,7 @@ export default function ChatPage() {
 
   // Keep participants list (known senders) up-to-date from observed messages
   useEffect(() => {
-    const set = new Set(messages.map((m) => m.sender))
+    const set = new Set(messages.map((m) => m.sender).filter((s) => !s.startsWith('[')))
     setParticipants([...set])
   }, [messages])
 
@@ -381,6 +386,20 @@ export default function ChatPage() {
           })
           .map((msg) => {
           const isSelf = msg.sender === (currentUser || token || 'user')
+          const isNewsArticle = msg.msg_type === 'news_article'
+
+          // ── News article card (scenario seed) ──
+          if (isNewsArticle) {
+            return (
+              <div key={msg.message_id} style={styles.newsCard}>
+                {msg.headline ? <div style={styles.newsHeadline}>{msg.headline}</div> : null}
+                {msg.source ? <div style={styles.newsSource}>{msg.source}</div> : null}
+                {msg.body ? <div style={styles.newsBody}>{msg.body}</div> : null}
+              </div>
+            )
+          }
+
+          // ── Regular chat message ──
           return (
           <div
             key={msg.message_id}
@@ -638,6 +657,31 @@ const styles = {
     overflowY: 'auto' as const,
     padding: '1rem',
     backgroundColor: '#fafafa',
+  },
+  newsCard: {
+    marginBottom: '1rem',
+    padding: '1rem 1.25rem',
+    borderRadius: '8px',
+    border: '1px solid #d0d7de',
+    backgroundColor: '#ffffff',
+    borderLeft: '4px solid #0969da',
+  },
+  newsHeadline: {
+    fontWeight: 'bold' as const,
+    fontSize: '1.1rem',
+    lineHeight: 1.3,
+    color: '#1a1a1a',
+    marginBottom: '0.25rem',
+  },
+  newsSource: {
+    fontSize: '0.8rem',
+    color: '#656d76',
+    marginBottom: '0.75rem',
+  },
+  newsBody: {
+    fontSize: '0.95rem',
+    lineHeight: 1.55,
+    color: '#333',
   },
   message: {
     marginBottom: '0.75rem',

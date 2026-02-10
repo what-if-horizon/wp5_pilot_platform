@@ -42,11 +42,22 @@ class Logger:
         })
     
     def log_session_end(self, reason: str = "completed") -> None:
-        """Log session termination."""
+        """Log session termination and generate an HTML report."""
         # session_id provided in the envelope by log_event, no need to repeat it here
         self.log_event("session_end", {
             "reason": reason
         })
+        self._generate_html_report()
+
+    def _generate_html_report(self) -> None:
+        """Generate an HTML report alongside the JSON log."""
+        try:
+            from utils.log_viewer import generate_html
+            html_path = self.log_file.with_suffix(".html")
+            html_path.write_text(generate_html(self.log_file))
+            print(f"HTML report written to {html_path}")
+        except Exception as e:
+            print(f"Warning: failed to generate HTML report: {e}")
     
     def log_message(self, message: dict) -> None:
         """Log a message (user or agent)."""

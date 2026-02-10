@@ -19,8 +19,8 @@ from pathlib import Path
 from platforms import SimulationSession
 # Import concurrent session manager: 
 from utils.session_manager import session_manager
-# Import login token manager and llm client
-from utils import token_manager, gemini_client
+# Import login token manager
+from utils import token_manager
 
 
 # Initialize FastAPI app - 
@@ -381,11 +381,13 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
-# Cleanup on shutdown (.on_event depricated; fix needed later)
+# Cleanup on shutdown (.on_event deprecated; fix needed later)
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Cleanup resources on shutdown (close async LLM client)."""
-    try:
-        await gemini_client.aclose()
-    except Exception as e:
-        print(f"Error closing gemini client: {e}")
+    """Stop all running sessions so logs are finalised and HTML reports generated."""
+    sessions = await session_manager.list_sessions()
+    for sid, session in sessions.items():
+        try:
+            await session.stop(reason="server_shutdown")
+        except Exception as e:
+            print(f"Error stopping session {sid} during shutdown: {e}")

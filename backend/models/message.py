@@ -22,6 +22,8 @@ class Message:
     liked_by: Set[str] = field(default_factory=set)
     # Whether this message has been reported by the (single) human participant
     reported: bool = False
+    # Arbitrary extra fields (e.g. scenario seed metadata) included in to_dict()
+    metadata: dict = field(default_factory=dict)
     
     @classmethod
     def create(
@@ -48,7 +50,7 @@ class Message:
     
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
-        return {
+        d = {
             "sender": self.sender,
             "content": self.content,
             "timestamp": self.timestamp.isoformat(),
@@ -62,6 +64,9 @@ class Message:
             # Reported flag (single human participant model)
             "reported": self.reported,
         }
+        if self.metadata:
+            d.update(self.metadata)
+        return d
 
     # Likes management
     @property
