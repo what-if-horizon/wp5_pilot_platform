@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@theme {
+  --color-chat-bg: #efeae2;
+  --color-header: #00897b;
+  --color-header-dark: #00695c;
+  --color-bubble-out: #d9fdd3;
+  --color-bubble-in: #ffffff;
+  --color-primary: #111b21;
+  --color-secondary: #667781;
+  --color-input-bar: #f0f2f5;
+  --color-send-btn: #00a884;
+  --color-send-btn-hover: #008f6f;
+  --color-quote: #06cf9c;
+  --color-danger: #ea0038;
+  --color-date-pill: rgba(255, 255, 255, 0.9);
+  --color-date-pill-text: #54656f;
+  --color-link-preview-bg: #d1f4cc;
+  --color-mention: #0366d6;
+}
+
+/* Bubble tails — only shown on first message in a group */
+.bubble-tail-right {
+  position: relative;
+}
+.bubble-tail-right::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -8px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 10px 8px;
+  border-color: transparent transparent transparent var(--color-bubble-out);
+}
+
+.bubble-tail-left {
+  position: relative;
+}
+.bubble-tail-left::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -8px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 8px 10px 0;
+  border-color: transparent var(--color-bubble-in) transparent transparent;
+}
+
+/* Chat feed scrollbar */
+.chat-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* Wallpaper pattern — subtle diagonal lines */
+.chat-wallpaper {
+  background-color: var(--color-chat-bg);
+  background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23c8c3ba' fill-opacity='0.15'%3E%3Cpath d='M20 0L0 20h4L20 4l16 16h4z'/%3E%3Cpath d='M20 40L0 20h4l16 16 16-16h4z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Context menu animation */
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.context-menu-enter {
+  animation: menu-in 0.12s ease-out;
+}

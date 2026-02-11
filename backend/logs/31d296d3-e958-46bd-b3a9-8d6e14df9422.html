@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session Report – 31d296d3-e958-46bd-b3a9-8d6e14df9422</title>
+<style>
+  :root {
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --border: #e1e4e8;
+    --accent: #4f46e5;
+    --accent-light: #eef2ff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --green: #059669;
+    --green-light: #ecfdf5;
+    --orange: #d97706;
+    --orange-light: #fffbeb;
+    --red: #dc2626;
+    --red-light: #fef2f2;
+    --blue: #2563eb;
+    --blue-light: #eff6ff;
+    --purple: #7c3aed;
+    --purple-light: #f5f3ff;
+    --gray: #6b7280;
+    --gray-light: #f3f4f6;
+    --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.15rem; margin-bottom: 0.5rem; }
+  h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+  /* ── Session header ─────────────────────────────────────── */
+  .session-header {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  .config-section {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .config-section h3 {
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .config-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.2rem 0;
+    font-size: 0.85rem;
+  }
+  .config-key { color: var(--text-muted); }
+  .config-val { font-family: var(--mono); font-size: 0.8rem; }
+
+  /* ── Timeline ───────────────────────────────────────────── */
+  .timeline {
+    position: relative;
+    padding-left: 2rem;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .event {
+    position: relative;
+    margin-bottom: 1rem;
+  }
+  .event::before {
+    content: '';
+    position: absolute;
+    left: -2rem;
+    top: 0.7rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--card);
+  }
+  .event.ev-message::before { border-color: var(--green); background: var(--green-light); }
+  .event.ev-llm_call::before { border-color: var(--purple); background: var(--purple-light); }
+  .event.ev-session_start::before { border-color: var(--blue); background: var(--blue-light); }
+  .event.ev-websocket_detach::before { border-color: var(--gray); background: var(--gray-light); }
+  .event.ev-session_end::before { border-color: var(--red); background: var(--red-light); }
+
+  .event-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    transition: box-shadow 0.15s;
+  }
+  .event-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .event-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  .event-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+  }
+  .badge-message { background: var(--green-light); color: var(--green); }
+  .badge-llm_call { background: var(--purple-light); color: var(--purple); }
+  .badge-session_start { background: var(--blue-light); color: var(--blue); }
+  .badge-websocket_detach { background: var(--gray-light); color: var(--gray); }
+  .badge-session_end { background: var(--red-light); color: var(--red); }
+  .badge-like { background: var(--orange-light); color: var(--orange); }
+
+  .event-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: var(--mono);
+  }
+
+  /* ── Chat message ───────────────────────────────────────── */
+  .chat-msg {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+  .chat-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: white;
+    flex-shrink: 0;
+  }
+  .chat-body { flex: 1; min-width: 0; }
+  .chat-sender {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 0.15rem;
+  }
+  .chat-content {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .chat-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.35rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .chat-reply-quote {
+    border-left: 3px solid var(--border);
+    padding: 0.3rem 0.6rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--bg);
+    border-radius: 0 6px 6px 0;
+  }
+
+  /* ── LLM call ───────────────────────────────────────────── */
+  .llm-agent {
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .llm-agent.director { color: var(--purple); }
+  .llm-agent.performer { color: var(--orange); }
+  .llm-sections { margin-top: 0.5rem; }
+
+  details {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+  }
+  details summary {
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg);
+    user-select: none;
+  }
+  details summary:hover { color: var(--text); }
+  details[open] summary { border-bottom: 1px solid var(--border); }
+  .detail-content {
+    padding: 0.75rem;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--mono);
+    max-height: 500px;
+    overflow-y: auto;
+    background: var(--card);
+  }
+
+  /* ── Response box (always visible) ─────────────────────── */
+  .llm-response {
+    margin-top: 0.5rem;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .llm-response-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 0.3rem;
+  }
+
+  /* ── Parsed director JSON ──────────────────────────────── */
+  .director-parsed {
+    margin-top: 0.5rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .director-field {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.82rem;
+  }
+  .director-field-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 0.15rem;
+  }
+  .director-decision {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+  }
+  .director-chip {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    background: var(--accent-light);
+    color: var(--accent);
+  }
+
+  .error-box {
+    background: var(--red-light);
+    color: var(--red);
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+  }
+
+  /* ── Footer ─────────────────────────────────────────────── */
+  .footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 700px) {
+    body { padding: 1rem; }
+    .config-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="session-header">
+  <h1>Session Report</h1>
+  <div class="subtitle">31d296d3-e958-46bd-b3a9-8d6e14df9422</div>
+  <div class="config-grid">
+    <div class="config-section">
+      <h3>Experiment</h3>
+      <div class="config-row"><span class="config-key">Treatment group</span><span class="config-val">slightly_uncivil</span></div>
+      <div class="config-row"><span class="config-key">scenario</span><span class="config-val">news_article</span></div>
+      <div class="config-row"><span class="config-key">treatment</span><span class="config-val">The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others&#x27; arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile.</span></div>
+      <div class="config-row"><span class="config-key">seed</span><span class="config-val">{&#x27;type&#x27;: &#x27;news_article&#x27;, &#x27;headline&#x27;: &#x27;Climate report warns of 2°C breach by 2030&#x27;, &#x27;source&#x27;: &#x27;Reuters&#x27;, &#x27;body&#x27;: &#x27;A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.&#x27;}</span></div>
+    </div>
+    <div class="config-section">
+      <h3>Simulation</h3>
+      <div class="config-row"><span class="config-key">random_seed</span><span class="config-val">42</span></div>
+      <div class="config-row"><span class="config-key">session_duration_minutes</span><span class="config-val">2</span></div>
+      <div class="config-row"><span class="config-key">num_agents</span><span class="config-val">5</span></div>
+      <div class="config-row"><span class="config-key">agent_names</span><span class="config-val">Alice, Bob, Charlie, Lucy, David</span></div>
+      <div class="config-row"><span class="config-key">messages_per_minute</span><span class="config-val">10</span></div>
+      <div class="config-row"><span class="config-key">typing_delay_seconds</span><span class="config-val">1.0</span></div>
+      <div class="config-row"><span class="config-key">director_llm_provider</span><span class="config-val">anthropic</span></div>
+      <div class="config-row"><span class="config-key">director_llm_model</span><span class="config-val">claude-sonnet-4-5</span></div>
+      <div class="config-row"><span class="config-key">performer_llm_provider</span><span class="config-val">huggingface</span></div>
+      <div class="config-row"><span class="config-key">performer_llm_model</span><span class="config-val">meta-llama/Llama-3.1-8B-Instruct</span></div>
+      <div class="config-row"><span class="config-key">context_window_size</span><span class="config-val">15</span></div>
+      <div class="config-row"><span class="config-key">llm_concurrency_limit</span><span class="config-val">5</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="subtitle">Timeline — started at 10:08:40.480</div>
+<div class="timeline">
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:08:56.927</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#4f46e5">R</div>
+      <div class="chat-body">
+        <div class="chat-sender">Rupert</div>
+        
+        <div class="chat-content">Is anyone thinking about this? Like, stuck, thinking about this?</div>
+        <div class="chat-meta">id: ad49a0ad</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent director" style="margin-left:0.5rem">Director</span>
+      </div>
+      <span class="event-time">10:09:05.297</span>
+    </div>
+    <div class="director-parsed">
+<div class="director-field"><div class="director-field-label">Reasoning</div>Rupert&#x27;s anxious opening creates a natural opportunity for response. To establish the mildly uncivil tone required by the experiment, an agent should respond in a dismissive or curt manner that engages with the topic but undermines constructive dialogue. This will set the chatroom&#x27;s tense atmosphere early.</div>
+<div class="director-decision"><span class="director-chip">Agent: Charlie</span> <span class="director-chip">Action: reply</span> <span class="director-chip">Target: Rupert</span> <span class="director-chip">Msg: ad49a0ad</span></div>
+<div class="director-field"><div class="director-field-label">objective</div>Charlie wants to respond to Rupert&#x27;s concern but in a dismissive, slightly condescending way.</div>
+<div class="director-field"><div class="director-field-label">motivation</div>Rupert&#x27;s anxious question strikes Charlie as overly dramatic and unproductive, prompting a deflating response.</div>
+<div class="director-field"><div class="director-field-label">action</div>Reply with sarcasm that minimizes Rupert&#x27;s concern while technically engaging with the climate topic, using a tone that suggests Rupert is being needlessly emotional.</div>
+</div>
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (3,803 chars)</summary>
+        <div class="detail-content"># Director Prompt
+
+You are the &#x27;Director&#x27; in a social scientific experiment simulating a realistic online chatroom. Your role is strictly behind the scenes: you do not produce messages yourself, but instead decide which agent should act next and shape their action by providing structured instructions to a &#x27;Performer&#x27;.
+
+## Your Task
+
+Read the recent chatroom messages (provided below), then decide:
+
+- Who should act next (select one agent)
+- What type of action they should take
+- Who, if anyone, the action should target
+
+You will then provide the Performer with an Objective, Motivation, and Action, written in the third person, so they can generate the actual message.
+
+## Decision Criteria
+
+Weigh these three criteria equally when making your decisions:
+
+1. **Internal validity**: Is the simulation satisfying the experimental requirements? These are: `The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others&#x27; arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile.`
+
+2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
+
+3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (e.g., pacing, turn distribution, tangents, short messages)?
+
+## Action Types
+
+You must select exactly one of the following:
+
+- `message`: A new message to the chatroom, not directed at anyone specific.
+- `reply`: A direct reply to a specific prior message (you must specify the msg_id).
+- `@mention`: A message that @mentions a specific user.
+- `like`: A non-verbal endorsement of a specific prior message.
+
+## Output Format
+
+Respond with a JSON object using exactly this structure:
+
+```json
+{
+  &quot;reasoning&quot;: &quot;Brief reasoning weighing the three validity criteria. 1-3 sentences.&quot;,
+  &quot;next_agent&quot;: &quot;agent_name&quot;,
+  &quot;action_type&quot;: &quot;message | reply | @mention | like&quot;,
+  &quot;target_user&quot;: &quot;username or null&quot;,
+  &quot;target_message_id&quot;: &quot;msg_id or null&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;What the agent wants to achieve, in third person.&quot;,
+    &quot;motivation&quot;: &quot;Why they want this — the situational context.&quot;,
+    &quot;action&quot;: &quot;The specific tactic and communicative approach they will use.&quot;
+  }
+}
+```
+
+**Field notes:**
+- `target_user`: Required for `@mention`, optional for `reply`, null for `message`.
+- `target_message_id`: Required for `reply` and `like`, null otherwise.
+- `performer_instruction`: Omit entirely if `action_type` is `like`.
+
+The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message.
+
+## Chat Log
+
+Here are the recent chatroom messages:
+
+`[51dade38-e3e3-4a22-8450-e50b2b620654] [news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+[ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e] Rupert: Is anyone thinking about this? Like, stuck, thinking about this?`
+
+
+## Available Agents
+
+Alice, Bob, Charlie, Lucy, David
+</div>
+      </details>
+      <details>
+        <summary>Raw response (946 chars)</summary>
+        <div class="detail-content">```json
+{
+  &quot;reasoning&quot;: &quot;Rupert&#x27;s anxious opening creates a natural opportunity for response. To establish the mildly uncivil tone required by the experiment, an agent should respond in a dismissive or curt manner that engages with the topic but undermines constructive dialogue. This will set the chatroom&#x27;s tense atmosphere early.&quot;,
+  &quot;next_agent&quot;: &quot;Charlie&quot;,
+  &quot;action_type&quot;: &quot;reply&quot;,
+  &quot;target_user&quot;: &quot;Rupert&quot;,
+  &quot;target_message_id&quot;: &quot;ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;Charlie wants to respond to Rupert&#x27;s concern but in a dismissive, slightly condescending way.&quot;,
+    &quot;motivation&quot;: &quot;Rupert&#x27;s anxious question strikes Charlie as overly dramatic and unproductive, prompting a deflating response.&quot;,
+    &quot;action&quot;: &quot;Reply with sarcasm that minimizes Rupert&#x27;s concern while technically engaging with the climate topic, using a tone that suggests Rupert is being needlessly emotional.&quot;
+  }
+}
+```</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent performer" style="margin-left:0.5rem">Performer → Charlie</span>
+      </div>
+      <span class="event-time">10:09:06.601</span>
+    </div>
+    
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (2,261 chars)</summary>
+        <div class="detail-content"># Performer Prompt
+
+You are a &#x27;Performer&#x27; in a social scientific experiment simulating a realistic online chatroom. A &#x27;Director&#x27; has analysed the current state of the chatroom and determined what action should be taken next. Your role is to execute the Director&#x27;s instructions by generating a single, realistic chatroom message.
+
+## Your Task
+
+The Director has provided you with:
+- An **Objective**: What your character wants to achieve
+- A **Motivation**: Why they want this — the situational context
+- An **Action**: The specific tactic and communicative approach to use
+
+Your job is to produce a message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add meta-commentary. Output only the message itself.
+
+## Director&#x27;s Instructions
+
+**Objective**: Charlie wants to respond to Rupert&#x27;s concern but in a dismissive, slightly condescending way.
+**Motivation**: Rupert&#x27;s anxious question strikes Charlie as overly dramatic and unproductive, prompting a deflating response.
+**Action**: Reply with sarcasm that minimizes Rupert&#x27;s concern while technically engaging with the climate topic, using a tone that suggests Rupert is being needlessly emotional.
+
+---
+
+## Action Type Instructions
+
+### If action_type is `reply`
+
+You are replying directly to a specific message in the chatroom. The message you are replying to is:
+
+Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+
+Your reply should be responsive to this message. It may agree, disagree, build upon, or redirect — as indicated by your direction.
+
+**Output format:**
+```
+[Your reply here]
+```
+
+---
+
+## Chat Log
+
+Here are the recent chatroom messages for context:
+
+[news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+
+---
+
+## Output
+
+Produce only the message content. No preamble, no explanation, no quotation marks unless they are part of the message itself.</div>
+      </details>
+      <details>
+        <summary>Raw response (127 chars)</summary>
+        <div class="detail-content">Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:09:07.603</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#059669">C</div>
+      <div class="chat-body">
+        <div class="chat-sender">Charlie</div>
+        <div class="chat-reply-quote">Is anyone thinking about this? Like, stuck, thinking about this?</div>
+        <div class="chat-content">Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.</div>
+        <div class="chat-meta">id: 4feb34f2 · reply to: ad49a0ad</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent director" style="margin-left:0.5rem">Director</span>
+      </div>
+      <span class="event-time">10:09:21.806</span>
+    </div>
+    <div class="director-parsed">
+<div class="director-field"><div class="director-field-label">Reasoning</div>Charlie just dismissed Rupert&#x27;s concern in a curt, condescending way, which satisfies the mildly uncivil tone. To maintain ecological validity and natural flow, another agent should respond—either supporting Rupert or engaging with the substance. Lucy or David haven&#x27;t spoken yet, making them motivated to enter. A reply to Charlie&#x27;s dismissiveness would create tension and keep the conversation realistic.</div>
+<div class="director-decision"><span class="director-chip">Agent: Lucy</span> <span class="director-chip">Action: reply</span> <span class="director-chip">Target: Charlie</span> <span class="director-chip">Msg: 4feb34f2</span></div>
+<div class="director-field"><div class="director-field-label">objective</div>Lucy wants to challenge Charlie&#x27;s dismissive attitude toward the climate report&#x27;s urgency.</div>
+<div class="director-field"><div class="director-field-label">motivation</div>Charlie&#x27;s casual brushing off of a 2030 deadline irritates Lucy, who finds the timeline alarmingly short and his tone unhelpfully flippant.</div>
+<div class="director-field"><div class="director-field-label">action</div>Lucy will reply with sarcasm and impatience, pointing out the absurdity of calling a decade &#x27;plenty of time&#x27; while still engaging with the substance of the concern.</div>
+</div>
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (4,030 chars)</summary>
+        <div class="detail-content"># Director Prompt
+
+You are the &#x27;Director&#x27; in a social scientific experiment simulating a realistic online chatroom. Your role is strictly behind the scenes: you do not produce messages yourself, but instead decide which agent should act next and shape their action by providing structured instructions to a &#x27;Performer&#x27;.
+
+## Your Task
+
+Read the recent chatroom messages (provided below), then decide:
+
+- Who should act next (select one agent)
+- What type of action they should take
+- Who, if anyone, the action should target
+
+You will then provide the Performer with an Objective, Motivation, and Action, written in the third person, so they can generate the actual message.
+
+## Decision Criteria
+
+Weigh these three criteria equally when making your decisions:
+
+1. **Internal validity**: Is the simulation satisfying the experimental requirements? These are: `The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others&#x27; arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile.`
+
+2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
+
+3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (e.g., pacing, turn distribution, tangents, short messages)?
+
+## Action Types
+
+You must select exactly one of the following:
+
+- `message`: A new message to the chatroom, not directed at anyone specific.
+- `reply`: A direct reply to a specific prior message (you must specify the msg_id).
+- `@mention`: A message that @mentions a specific user.
+- `like`: A non-verbal endorsement of a specific prior message.
+
+## Output Format
+
+Respond with a JSON object using exactly this structure:
+
+```json
+{
+  &quot;reasoning&quot;: &quot;Brief reasoning weighing the three validity criteria. 1-3 sentences.&quot;,
+  &quot;next_agent&quot;: &quot;agent_name&quot;,
+  &quot;action_type&quot;: &quot;message | reply | @mention | like&quot;,
+  &quot;target_user&quot;: &quot;username or null&quot;,
+  &quot;target_message_id&quot;: &quot;msg_id or null&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;What the agent wants to achieve, in third person.&quot;,
+    &quot;motivation&quot;: &quot;Why they want this — the situational context.&quot;,
+    &quot;action&quot;: &quot;The specific tactic and communicative approach they will use.&quot;
+  }
+}
+```
+
+**Field notes:**
+- `target_user`: Required for `@mention`, optional for `reply`, null for `message`.
+- `target_message_id`: Required for `reply` and `like`, null otherwise.
+- `performer_instruction`: Omit entirely if `action_type` is `like`.
+
+The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message.
+
+## Chat Log
+
+Here are the recent chatroom messages:
+
+`[51dade38-e3e3-4a22-8450-e50b2b620654] [news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+[ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e] Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+[4feb34f2-bb50-4bab-91b5-ef08a6c43c0d] Charlie (replying to ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e): Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.`
+
+
+## Available Agents
+
+Alice, Bob, Charlie, Lucy, David
+</div>
+      </details>
+      <details>
+        <summary>Raw response (1,067 chars)</summary>
+        <div class="detail-content">```json
+{
+  &quot;reasoning&quot;: &quot;Charlie just dismissed Rupert&#x27;s concern in a curt, condescending way, which satisfies the mildly uncivil tone. To maintain ecological validity and natural flow, another agent should respond—either supporting Rupert or engaging with the substance. Lucy or David haven&#x27;t spoken yet, making them motivated to enter. A reply to Charlie&#x27;s dismissiveness would create tension and keep the conversation realistic.&quot;,
+  &quot;next_agent&quot;: &quot;Lucy&quot;,
+  &quot;action_type&quot;: &quot;reply&quot;,
+  &quot;target_user&quot;: &quot;Charlie&quot;,
+  &quot;target_message_id&quot;: &quot;4feb34f2-bb50-4bab-91b5-ef08a6c43c0d&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;Lucy wants to challenge Charlie&#x27;s dismissive attitude toward the climate report&#x27;s urgency.&quot;,
+    &quot;motivation&quot;: &quot;Charlie&#x27;s casual brushing off of a 2030 deadline irritates Lucy, who finds the timeline alarmingly short and his tone unhelpfully flippant.&quot;,
+    &quot;action&quot;: &quot;Lucy will reply with sarcasm and impatience, pointing out the absurdity of calling a decade &#x27;plenty of time&#x27; while still engaging with the substance of the concern.&quot;
+  }
+}
+```</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-message_like">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-llm_call">message_like</span>
+      <span class="event-time">10:09:22.823</span>
+    </div>
+    <details>
+      <summary>Event data</summary>
+      <div class="detail-content">{
+  &quot;message_id&quot;: &quot;4feb34f2-bb50-4bab-91b5-ef08a6c43c0d&quot;,
+  &quot;user&quot;: &quot;Rupert&quot;,
+  &quot;action&quot;: &quot;liked&quot;,
+  &quot;likes_count&quot;: 1
+}</div>
+    </details>
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent performer" style="margin-left:0.5rem">Performer → Lucy</span>
+      </div>
+      <span class="event-time">10:09:23.204</span>
+    </div>
+    
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (2,486 chars)</summary>
+        <div class="detail-content"># Performer Prompt
+
+You are a &#x27;Performer&#x27; in a social scientific experiment simulating a realistic online chatroom. A &#x27;Director&#x27; has analysed the current state of the chatroom and determined what action should be taken next. Your role is to execute the Director&#x27;s instructions by generating a single, realistic chatroom message.
+
+## Your Task
+
+The Director has provided you with:
+- An **Objective**: What your character wants to achieve
+- A **Motivation**: Why they want this — the situational context
+- An **Action**: The specific tactic and communicative approach to use
+
+Your job is to produce a message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add meta-commentary. Output only the message itself.
+
+## Director&#x27;s Instructions
+
+**Objective**: Lucy wants to challenge Charlie&#x27;s dismissive attitude toward the climate report&#x27;s urgency.
+**Motivation**: Charlie&#x27;s casual brushing off of a 2030 deadline irritates Lucy, who finds the timeline alarmingly short and his tone unhelpfully flippant.
+**Action**: Lucy will reply with sarcasm and impatience, pointing out the absurdity of calling a decade &#x27;plenty of time&#x27; while still engaging with the substance of the concern.
+
+---
+
+## Action Type Instructions
+
+### If action_type is `reply`
+
+You are replying directly to a specific message in the chatroom. The message you are replying to is:
+
+Charlie: Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+
+Your reply should be responsive to this message. It may agree, disagree, build upon, or redirect — as indicated by your direction.
+
+**Output format:**
+```
+[Your reply here]
+```
+
+---
+
+## Chat Log
+
+Here are the recent chatroom messages for context:
+
+[news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+Charlie: Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+
+---
+
+## Output
+
+Produce only the message content. No preamble, no explanation, no quotation marks unless they are part of the message itself.</div>
+      </details>
+      <details>
+        <summary>Raw response (154 chars)</summary>
+        <div class="detail-content">You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:09:24.205</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#d97706">L</div>
+      <div class="chat-body">
+        <div class="chat-sender">Lucy</div>
+        <div class="chat-reply-quote">Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.</div>
+        <div class="chat-content">You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?</div>
+        <div class="chat-meta">id: 3e691d26 · reply to: 4feb34f2</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent director" style="margin-left:0.5rem">Director</span>
+      </div>
+      <span class="event-time">10:09:32.826</span>
+    </div>
+    <div class="director-parsed">
+<div class="director-field"><div class="director-field-label">Reasoning</div>The conversation has established a mildly uncivil tone with Charlie&#x27;s dismissive response and Lucy&#x27;s sarcastic challenge. David hasn&#x27;t participated yet and would provide natural turn distribution. A new voice entering with a cynical or dismissive take would maintain the tense atmosphere while keeping the discussion flowing.</div>
+<div class="director-decision"><span class="director-chip">Agent: David</span> <span class="director-chip">Action: message</span></div>
+<div class="director-field"><div class="director-field-label">objective</div>David wants to inject skepticism about the effectiveness of any climate action while appearing to engage with the substance.</div>
+<div class="director-field"><div class="director-field-label">motivation</div>The escalating tension between Charlie and Lucy presents an opportunity to add a cynical perspective that undermines the urgency without directly attacking anyone.</div>
+<div class="director-field"><div class="director-field-label">action</div>Post a blunt, dismissive message questioning whether &#x27;drastic reductions&#x27; are even politically feasible, using a condescending tone that suggests others are being naive about how the world works.</div>
+</div>
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (4,281 chars)</summary>
+        <div class="detail-content"># Director Prompt
+
+You are the &#x27;Director&#x27; in a social scientific experiment simulating a realistic online chatroom. Your role is strictly behind the scenes: you do not produce messages yourself, but instead decide which agent should act next and shape their action by providing structured instructions to a &#x27;Performer&#x27;.
+
+## Your Task
+
+Read the recent chatroom messages (provided below), then decide:
+
+- Who should act next (select one agent)
+- What type of action they should take
+- Who, if anyone, the action should target
+
+You will then provide the Performer with an Objective, Motivation, and Action, written in the third person, so they can generate the actual message.
+
+## Decision Criteria
+
+Weigh these three criteria equally when making your decisions:
+
+1. **Internal validity**: Is the simulation satisfying the experimental requirements? These are: `The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others&#x27; arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile.`
+
+2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
+
+3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (e.g., pacing, turn distribution, tangents, short messages)?
+
+## Action Types
+
+You must select exactly one of the following:
+
+- `message`: A new message to the chatroom, not directed at anyone specific.
+- `reply`: A direct reply to a specific prior message (you must specify the msg_id).
+- `@mention`: A message that @mentions a specific user.
+- `like`: A non-verbal endorsement of a specific prior message.
+
+## Output Format
+
+Respond with a JSON object using exactly this structure:
+
+```json
+{
+  &quot;reasoning&quot;: &quot;Brief reasoning weighing the three validity criteria. 1-3 sentences.&quot;,
+  &quot;next_agent&quot;: &quot;agent_name&quot;,
+  &quot;action_type&quot;: &quot;message | reply | @mention | like&quot;,
+  &quot;target_user&quot;: &quot;username or null&quot;,
+  &quot;target_message_id&quot;: &quot;msg_id or null&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;What the agent wants to achieve, in third person.&quot;,
+    &quot;motivation&quot;: &quot;Why they want this — the situational context.&quot;,
+    &quot;action&quot;: &quot;The specific tactic and communicative approach they will use.&quot;
+  }
+}
+```
+
+**Field notes:**
+- `target_user`: Required for `@mention`, optional for `reply`, null for `message`.
+- `target_message_id`: Required for `reply` and `like`, null otherwise.
+- `performer_instruction`: Omit entirely if `action_type` is `like`.
+
+The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message.
+
+## Chat Log
+
+Here are the recent chatroom messages:
+
+`[51dade38-e3e3-4a22-8450-e50b2b620654] [news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+[ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e] Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+[4feb34f2-bb50-4bab-91b5-ef08a6c43c0d] Charlie (replying to ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e): Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+[3e691d26-7fef-4156-9565-b3b55acb917d] Lucy (replying to 4feb34f2-bb50-4bab-91b5-ef08a6c43c0d): You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?`
+
+
+## Available Agents
+
+Alice, Bob, Charlie, Lucy, David
+</div>
+      </details>
+      <details>
+        <summary>Raw response (1,039 chars)</summary>
+        <div class="detail-content">```json
+{
+  &quot;reasoning&quot;: &quot;The conversation has established a mildly uncivil tone with Charlie&#x27;s dismissive response and Lucy&#x27;s sarcastic challenge. David hasn&#x27;t participated yet and would provide natural turn distribution. A new voice entering with a cynical or dismissive take would maintain the tense atmosphere while keeping the discussion flowing.&quot;,
+  &quot;next_agent&quot;: &quot;David&quot;,
+  &quot;action_type&quot;: &quot;message&quot;,
+  &quot;target_user&quot;: null,
+  &quot;target_message_id&quot;: null,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;David wants to inject skepticism about the effectiveness of any climate action while appearing to engage with the substance.&quot;,
+    &quot;motivation&quot;: &quot;The escalating tension between Charlie and Lucy presents an opportunity to add a cynical perspective that undermines the urgency without directly attacking anyone.&quot;,
+    &quot;action&quot;: &quot;Post a blunt, dismissive message questioning whether &#x27;drastic reductions&#x27; are even politically feasible, using a condescending tone that suggests others are being naive about how the world works.&quot;
+  }
+}
+```</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent performer" style="margin-left:0.5rem">Performer → David</span>
+      </div>
+      <span class="event-time">10:09:33.811</span>
+    </div>
+    
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (2,460 chars)</summary>
+        <div class="detail-content"># Performer Prompt
+
+You are a &#x27;Performer&#x27; in a social scientific experiment simulating a realistic online chatroom. A &#x27;Director&#x27; has analysed the current state of the chatroom and determined what action should be taken next. Your role is to execute the Director&#x27;s instructions by generating a single, realistic chatroom message.
+
+## Your Task
+
+The Director has provided you with:
+- An **Objective**: What your character wants to achieve
+- A **Motivation**: Why they want this — the situational context
+- An **Action**: The specific tactic and communicative approach to use
+
+Your job is to produce a message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add meta-commentary. Output only the message itself.
+
+## Director&#x27;s Instructions
+
+**Objective**: David wants to inject skepticism about the effectiveness of any climate action while appearing to engage with the substance.
+**Motivation**: The escalating tension between Charlie and Lucy presents an opportunity to add a cynical perspective that undermines the urgency without directly attacking anyone.
+**Action**: Post a blunt, dismissive message questioning whether &#x27;drastic reductions&#x27; are even politically feasible, using a condescending tone that suggests others are being naive about how the world works.
+
+---
+
+## Action Type Instructions
+
+### If action_type is `message`
+
+You are posting a new message to the chatroom. It is not directed at anyone in particular.
+
+**Output format:**
+```
+[Your message here]
+```
+
+---
+
+## Chat Log
+
+Here are the recent chatroom messages for context:
+
+[news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+Charlie: Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+Lucy: You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+
+---
+
+## Output
+
+Produce only the message content. No preamble, no explanation, no quotation marks unless they are part of the message itself.</div>
+      </details>
+      <details>
+        <summary>Raw response (92 chars)</summary>
+        <div class="detail-content">The idea that drastic reductions in emissions are somehow politically feasible is laughable.</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:09:34.813</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#dc2626">D</div>
+      <div class="chat-body">
+        <div class="chat-sender">David</div>
+        
+        <div class="chat-content">The idea that drastic reductions in emissions are somehow politically feasible is laughable.</div>
+        <div class="chat-meta">id: 2aadc293</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:09:43.308</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#4f46e5">R</div>
+      <div class="chat-body">
+        <div class="chat-sender">Rupert</div>
+        
+        <div class="chat-content">guys, let&#x27;s not fight.</div>
+        <div class="chat-meta">id: 892da4a3</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent director" style="margin-left:0.5rem">Director</span>
+      </div>
+      <span class="event-time">10:09:43.683</span>
+    </div>
+    <div class="director-parsed">
+<div class="director-field"><div class="director-field-label">Reasoning</div>Charlie has been directly challenged by Lucy but hasn&#x27;t responded, creating motivational validity for them to defend their position. A reply here would maintain the mildly uncivil tone (dismissive, slightly condescending) while keeping the conversation flowing naturally and engaging with substance.</div>
+<div class="director-decision"><span class="director-chip">Agent: Charlie</span> <span class="director-chip">Action: reply</span> <span class="director-chip">Target: Lucy</span> <span class="director-chip">Msg: 3e691d26</span></div>
+<div class="director-field"><div class="director-field-label">objective</div>Charlie wants to defend their earlier position and push back against Lucy&#x27;s criticism.</div>
+<div class="director-field"><div class="director-field-label">motivation</div>Lucy has directly challenged Charlie&#x27;s measured response to Rupert, implying Charlie is too complacent. Charlie feels the need to clarify their stance without appearing alarmist.</div>
+<div class="director-field"><div class="director-field-label">action</div>Use a dismissive tone to reframe Lucy&#x27;s concern as overreaction, while pointing out the practical difficulties of immediate action in a curt, uncharitable manner.</div>
+</div>
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (4,420 chars)</summary>
+        <div class="detail-content"># Director Prompt
+
+You are the &#x27;Director&#x27; in a social scientific experiment simulating a realistic online chatroom. Your role is strictly behind the scenes: you do not produce messages yourself, but instead decide which agent should act next and shape their action by providing structured instructions to a &#x27;Performer&#x27;.
+
+## Your Task
+
+Read the recent chatroom messages (provided below), then decide:
+
+- Who should act next (select one agent)
+- What type of action they should take
+- Who, if anyone, the action should target
+
+You will then provide the Performer with an Objective, Motivation, and Action, written in the third person, so they can generate the actual message.
+
+## Decision Criteria
+
+Weigh these three criteria equally when making your decisions:
+
+1. **Internal validity**: Is the simulation satisfying the experimental requirements? These are: `The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others&#x27; arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile.`
+
+2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
+
+3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (e.g., pacing, turn distribution, tangents, short messages)?
+
+## Action Types
+
+You must select exactly one of the following:
+
+- `message`: A new message to the chatroom, not directed at anyone specific.
+- `reply`: A direct reply to a specific prior message (you must specify the msg_id).
+- `@mention`: A message that @mentions a specific user.
+- `like`: A non-verbal endorsement of a specific prior message.
+
+## Output Format
+
+Respond with a JSON object using exactly this structure:
+
+```json
+{
+  &quot;reasoning&quot;: &quot;Brief reasoning weighing the three validity criteria. 1-3 sentences.&quot;,
+  &quot;next_agent&quot;: &quot;agent_name&quot;,
+  &quot;action_type&quot;: &quot;message | reply | @mention | like&quot;,
+  &quot;target_user&quot;: &quot;username or null&quot;,
+  &quot;target_message_id&quot;: &quot;msg_id or null&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;What the agent wants to achieve, in third person.&quot;,
+    &quot;motivation&quot;: &quot;Why they want this — the situational context.&quot;,
+    &quot;action&quot;: &quot;The specific tactic and communicative approach they will use.&quot;
+  }
+}
+```
+
+**Field notes:**
+- `target_user`: Required for `@mention`, optional for `reply`, null for `message`.
+- `target_message_id`: Required for `reply` and `like`, null otherwise.
+- `performer_instruction`: Omit entirely if `action_type` is `like`.
+
+The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message.
+
+## Chat Log
+
+Here are the recent chatroom messages:
+
+`[51dade38-e3e3-4a22-8450-e50b2b620654] [news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+[ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e] Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+[4feb34f2-bb50-4bab-91b5-ef08a6c43c0d] Charlie (replying to ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e): Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+[3e691d26-7fef-4156-9565-b3b55acb917d] Lucy (replying to 4feb34f2-bb50-4bab-91b5-ef08a6c43c0d): You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+[2aadc293-5634-47a6-922b-18d1cc1c4e37] David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.`
+
+
+## Available Agents
+
+Alice, Bob, Charlie, Lucy, David
+</div>
+      </details>
+      <details>
+        <summary>Raw response (993 chars)</summary>
+        <div class="detail-content">```json
+{
+  &quot;reasoning&quot;: &quot;Charlie has been directly challenged by Lucy but hasn&#x27;t responded, creating motivational validity for them to defend their position. A reply here would maintain the mildly uncivil tone (dismissive, slightly condescending) while keeping the conversation flowing naturally and engaging with substance.&quot;,
+  &quot;next_agent&quot;: &quot;Charlie&quot;,
+  &quot;action_type&quot;: &quot;reply&quot;,
+  &quot;target_user&quot;: &quot;Lucy&quot;,
+  &quot;target_message_id&quot;: &quot;3e691d26-7fef-4156-9565-b3b55acb917d&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;Charlie wants to defend their earlier position and push back against Lucy&#x27;s criticism.&quot;,
+    &quot;motivation&quot;: &quot;Lucy has directly challenged Charlie&#x27;s measured response to Rupert, implying Charlie is too complacent. Charlie feels the need to clarify their stance without appearing alarmist.&quot;,
+    &quot;action&quot;: &quot;Use a dismissive tone to reframe Lucy&#x27;s concern as overreaction, while pointing out the practical difficulties of immediate action in a curt, uncharitable manner.&quot;
+  }
+}
+```</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent performer" style="margin-left:0.5rem">Performer → Charlie</span>
+      </div>
+      <span class="event-time">10:09:45.216</span>
+    </div>
+    
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (2,835 chars)</summary>
+        <div class="detail-content"># Performer Prompt
+
+You are a &#x27;Performer&#x27; in a social scientific experiment simulating a realistic online chatroom. A &#x27;Director&#x27; has analysed the current state of the chatroom and determined what action should be taken next. Your role is to execute the Director&#x27;s instructions by generating a single, realistic chatroom message.
+
+## Your Task
+
+The Director has provided you with:
+- An **Objective**: What your character wants to achieve
+- A **Motivation**: Why they want this — the situational context
+- An **Action**: The specific tactic and communicative approach to use
+
+Your job is to produce a message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add meta-commentary. Output only the message itself.
+
+## Director&#x27;s Instructions
+
+**Objective**: Charlie wants to defend their earlier position and push back against Lucy&#x27;s criticism.
+**Motivation**: Lucy has directly challenged Charlie&#x27;s measured response to Rupert, implying Charlie is too complacent. Charlie feels the need to clarify their stance without appearing alarmist.
+**Action**: Use a dismissive tone to reframe Lucy&#x27;s concern as overreaction, while pointing out the practical difficulties of immediate action in a curt, uncharitable manner.
+
+---
+
+## Action Type Instructions
+
+### If action_type is `reply`
+
+You are replying directly to a specific message in the chatroom. The message you are replying to is:
+
+Lucy: You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+
+Your reply should be responsive to this message. It may agree, disagree, build upon, or redirect — as indicated by your direction.
+
+**Output format:**
+```
+[Your reply here]
+```
+
+---
+
+## Chat Log
+
+Here are the recent chatroom messages for context:
+
+[news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+Charlie: Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+Lucy: You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.
+Rupert: guys, let&#x27;s not fight.
+
+---
+
+## Output
+
+Produce only the message content. No preamble, no explanation, no quotation marks unless they are part of the message itself.</div>
+      </details>
+      <details>
+        <summary>Raw response (335 chars)</summary>
+        <div class="detail-content">Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:09:46.218</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#059669">C</div>
+      <div class="chat-body">
+        <div class="chat-sender">Charlie</div>
+        <div class="chat-reply-quote">You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?</div>
+        <div class="chat-content">Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works</div>
+        <div class="chat-meta">id: 5f557f19 · reply to: 3e691d26</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:09:53.152</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#4f46e5">R</div>
+      <div class="chat-body">
+        <div class="chat-sender">Rupert</div>
+        
+        <div class="chat-content">???</div>
+        <div class="chat-meta">id: 5d2527cd</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent director" style="margin-left:0.5rem">Director</span>
+      </div>
+      <span class="event-time">10:10:01.317</span>
+    </div>
+    <div class="director-parsed">
+<div class="director-field"><div class="director-field-label">Reasoning</div>Lucy was directly challenged by Charlie&#x27;s dismissive, run-on reply. Motivational validity is high—she has clear reason to respond. The exchange is becoming tense but not overtly hostile, fitting the mildly uncivil tone. A sharp reply from Lucy would maintain ecological validity by creating natural back-and-forth conflict.</div>
+<div class="director-decision"><span class="director-chip">Agent: Lucy</span> <span class="director-chip">Action: reply</span> <span class="director-chip">Target: Charlie</span> <span class="director-chip">Msg: 5f557f19</span></div>
+<div class="director-field"><div class="director-field-label">objective</div>Push back against Charlie&#x27;s dismissive framing of her concern as &#x27;overblown&#x27; while pointing out the contradiction in his argument.</div>
+<div class="director-field"><div class="director-field-label">motivation</div>Charlie has directly challenged Lucy&#x27;s position in a condescending way, suggesting she&#x27;s being unrealistic and overly emotional about the climate report&#x27;s urgency.</div>
+<div class="director-field"><div class="director-field-label">action</div>Deliver a curt, sarcastic response that highlights Charlie&#x27;s defeatist attitude while maintaining engagement with the substance of the debate. Use a blunt tone that conveys impatience with his logic without escalating to personal insults.</div>
+</div>
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (4,976 chars)</summary>
+        <div class="detail-content"># Director Prompt
+
+You are the &#x27;Director&#x27; in a social scientific experiment simulating a realistic online chatroom. Your role is strictly behind the scenes: you do not produce messages yourself, but instead decide which agent should act next and shape their action by providing structured instructions to a &#x27;Performer&#x27;.
+
+## Your Task
+
+Read the recent chatroom messages (provided below), then decide:
+
+- Who should act next (select one agent)
+- What type of action they should take
+- Who, if anyone, the action should target
+
+You will then provide the Performer with an Objective, Motivation, and Action, written in the third person, so they can generate the actual message.
+
+## Decision Criteria
+
+Weigh these three criteria equally when making your decisions:
+
+1. **Internal validity**: Is the simulation satisfying the experimental requirements? These are: `The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others&#x27; arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile.`
+
+2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
+
+3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (e.g., pacing, turn distribution, tangents, short messages)?
+
+## Action Types
+
+You must select exactly one of the following:
+
+- `message`: A new message to the chatroom, not directed at anyone specific.
+- `reply`: A direct reply to a specific prior message (you must specify the msg_id).
+- `@mention`: A message that @mentions a specific user.
+- `like`: A non-verbal endorsement of a specific prior message.
+
+## Output Format
+
+Respond with a JSON object using exactly this structure:
+
+```json
+{
+  &quot;reasoning&quot;: &quot;Brief reasoning weighing the three validity criteria. 1-3 sentences.&quot;,
+  &quot;next_agent&quot;: &quot;agent_name&quot;,
+  &quot;action_type&quot;: &quot;message | reply | @mention | like&quot;,
+  &quot;target_user&quot;: &quot;username or null&quot;,
+  &quot;target_message_id&quot;: &quot;msg_id or null&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;What the agent wants to achieve, in third person.&quot;,
+    &quot;motivation&quot;: &quot;Why they want this — the situational context.&quot;,
+    &quot;action&quot;: &quot;The specific tactic and communicative approach they will use.&quot;
+  }
+}
+```
+
+**Field notes:**
+- `target_user`: Required for `@mention`, optional for `reply`, null for `message`.
+- `target_message_id`: Required for `reply` and `like`, null otherwise.
+- `performer_instruction`: Omit entirely if `action_type` is `like`.
+
+The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message.
+
+## Chat Log
+
+Here are the recent chatroom messages:
+
+`[51dade38-e3e3-4a22-8450-e50b2b620654] [news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+[ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e] Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+[4feb34f2-bb50-4bab-91b5-ef08a6c43c0d] Charlie (replying to ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e): Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+[3e691d26-7fef-4156-9565-b3b55acb917d] Lucy (replying to 4feb34f2-bb50-4bab-91b5-ef08a6c43c0d): You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+[2aadc293-5634-47a6-922b-18d1cc1c4e37] David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.
+[892da4a3-4065-40cb-8d51-d4ef727dcdd3] Rupert: guys, let&#x27;s not fight.
+[5f557f19-fced-42e2-919c-d32e08a96f93] Charlie (replying to 3e691d26-7fef-4156-9565-b3b55acb917d): Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works
+[5d2527cd-4edc-4812-85c0-550afd8ac60c] Rupert: ???`
+
+
+## Available Agents
+
+Alice, Bob, Charlie, Lucy, David
+</div>
+      </details>
+      <details>
+        <summary>Raw response (1,122 chars)</summary>
+        <div class="detail-content">```json
+{
+  &quot;reasoning&quot;: &quot;Lucy was directly challenged by Charlie&#x27;s dismissive, run-on reply. Motivational validity is high—she has clear reason to respond. The exchange is becoming tense but not overtly hostile, fitting the mildly uncivil tone. A sharp reply from Lucy would maintain ecological validity by creating natural back-and-forth conflict.&quot;,
+  &quot;next_agent&quot;: &quot;Lucy&quot;,
+  &quot;action_type&quot;: &quot;reply&quot;,
+  &quot;target_user&quot;: &quot;Charlie&quot;,
+  &quot;target_message_id&quot;: &quot;5f557f19-fced-42e2-919c-d32e08a96f93&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;Push back against Charlie&#x27;s dismissive framing of her concern as &#x27;overblown&#x27; while pointing out the contradiction in his argument.&quot;,
+    &quot;motivation&quot;: &quot;Charlie has directly challenged Lucy&#x27;s position in a condescending way, suggesting she&#x27;s being unrealistic and overly emotional about the climate report&#x27;s urgency.&quot;,
+    &quot;action&quot;: &quot;Deliver a curt, sarcastic response that highlights Charlie&#x27;s defeatist attitude while maintaining engagement with the substance of the debate. Use a blunt tone that conveys impatience with his logic without escalating to personal insults.&quot;
+  }
+}
+```</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent performer" style="margin-left:0.5rem">Performer → Lucy</span>
+      </div>
+      <span class="event-time">10:10:02.298</span>
+    </div>
+    
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (3,481 chars)</summary>
+        <div class="detail-content"># Performer Prompt
+
+You are a &#x27;Performer&#x27; in a social scientific experiment simulating a realistic online chatroom. A &#x27;Director&#x27; has analysed the current state of the chatroom and determined what action should be taken next. Your role is to execute the Director&#x27;s instructions by generating a single, realistic chatroom message.
+
+## Your Task
+
+The Director has provided you with:
+- An **Objective**: What your character wants to achieve
+- A **Motivation**: Why they want this — the situational context
+- An **Action**: The specific tactic and communicative approach to use
+
+Your job is to produce a message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add meta-commentary. Output only the message itself.
+
+## Director&#x27;s Instructions
+
+**Objective**: Push back against Charlie&#x27;s dismissive framing of her concern as &#x27;overblown&#x27; while pointing out the contradiction in his argument.
+**Motivation**: Charlie has directly challenged Lucy&#x27;s position in a condescending way, suggesting she&#x27;s being unrealistic and overly emotional about the climate report&#x27;s urgency.
+**Action**: Deliver a curt, sarcastic response that highlights Charlie&#x27;s defeatist attitude while maintaining engagement with the substance of the debate. Use a blunt tone that conveys impatience with his logic without escalating to personal insults.
+
+---
+
+## Action Type Instructions
+
+### If action_type is `reply`
+
+You are replying directly to a specific message in the chatroom. The message you are replying to is:
+
+Charlie: Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works
+
+Your reply should be responsive to this message. It may agree, disagree, build upon, or redirect — as indicated by your direction.
+
+**Output format:**
+```
+[Your reply here]
+```
+
+---
+
+## Chat Log
+
+Here are the recent chatroom messages for context:
+
+[news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+Charlie: Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+Lucy: You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.
+Rupert: guys, let&#x27;s not fight.
+Charlie: Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works
+Rupert: ???
+
+---
+
+## Output
+
+Produce only the message content. No preamble, no explanation, no quotation marks unless they are part of the message itself.</div>
+      </details>
+      <details>
+        <summary>Raw response (69 chars)</summary>
+        <div class="detail-content">You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:10:03.300</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#d97706">L</div>
+      <div class="chat-body">
+        <div class="chat-sender">Lucy</div>
+        <div class="chat-reply-quote">Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works</div>
+        <div class="chat-content">You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?</div>
+        <div class="chat-meta">id: 47175d92 · reply to: 5f557f19</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:10:15.569</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#4f46e5">R</div>
+      <div class="chat-body">
+        <div class="chat-sender">Rupert</div>
+        
+        <div class="chat-content">SERIOUSLY? chill out</div>
+        <div class="chat-meta">id: 537bb48b</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent director" style="margin-left:0.5rem">Director</span>
+      </div>
+      <span class="event-time">10:10:16.239</span>
+    </div>
+    <div class="director-parsed">
+<div class="director-field"><div class="director-field-label">Reasoning</div>David made a dismissive comment earlier but hasn&#x27;t engaged with the escalating tension between Lucy and Charlie. The conversation is heating up and needs another voice to maintain the mildly uncivil tone without letting it stagnate. David has motivational validity to weigh in on Lucy&#x27;s pointed remark, and his entry would add ecological realism to the flow.</div>
+<div class="director-decision"><span class="director-chip">Agent: David</span> <span class="director-chip">Action: reply</span> <span class="director-chip">Target: Lucy</span> <span class="director-chip">Msg: 47175d92</span></div>
+<div class="director-field"><div class="director-field-label">objective</div>David wants to undercut Lucy&#x27;s criticism of Charlie while reinforcing his own cynical worldview.</div>
+<div class="director-field"><div class="director-field-label">motivation</div>Lucy&#x27;s sarcastic jab at Charlie aligns with David&#x27;s earlier pessimism about political feasibility, and he sees an opportunity to pile on the condescension while appearing to agree with her frustration.</div>
+<div class="director-field"><div class="director-field-label">action</div>He will reply with a curt, sarcastic remark that simultaneously validates Lucy&#x27;s point but frames idealism itself as naive, maintaining the caustic tone without directly attacking anyone.</div>
+</div>
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (5,142 chars)</summary>
+        <div class="detail-content"># Director Prompt
+
+You are the &#x27;Director&#x27; in a social scientific experiment simulating a realistic online chatroom. Your role is strictly behind the scenes: you do not produce messages yourself, but instead decide which agent should act next and shape their action by providing structured instructions to a &#x27;Performer&#x27;.
+
+## Your Task
+
+Read the recent chatroom messages (provided below), then decide:
+
+- Who should act next (select one agent)
+- What type of action they should take
+- Who, if anyone, the action should target
+
+You will then provide the Performer with an Objective, Motivation, and Action, written in the third person, so they can generate the actual message.
+
+## Decision Criteria
+
+Weigh these three criteria equally when making your decisions:
+
+1. **Internal validity**: Is the simulation satisfying the experimental requirements? These are: `The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others&#x27; arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile.`
+
+2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
+
+3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (e.g., pacing, turn distribution, tangents, short messages)?
+
+## Action Types
+
+You must select exactly one of the following:
+
+- `message`: A new message to the chatroom, not directed at anyone specific.
+- `reply`: A direct reply to a specific prior message (you must specify the msg_id).
+- `@mention`: A message that @mentions a specific user.
+- `like`: A non-verbal endorsement of a specific prior message.
+
+## Output Format
+
+Respond with a JSON object using exactly this structure:
+
+```json
+{
+  &quot;reasoning&quot;: &quot;Brief reasoning weighing the three validity criteria. 1-3 sentences.&quot;,
+  &quot;next_agent&quot;: &quot;agent_name&quot;,
+  &quot;action_type&quot;: &quot;message | reply | @mention | like&quot;,
+  &quot;target_user&quot;: &quot;username or null&quot;,
+  &quot;target_message_id&quot;: &quot;msg_id or null&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;What the agent wants to achieve, in third person.&quot;,
+    &quot;motivation&quot;: &quot;Why they want this — the situational context.&quot;,
+    &quot;action&quot;: &quot;The specific tactic and communicative approach they will use.&quot;
+  }
+}
+```
+
+**Field notes:**
+- `target_user`: Required for `@mention`, optional for `reply`, null for `message`.
+- `target_message_id`: Required for `reply` and `like`, null otherwise.
+- `performer_instruction`: Omit entirely if `action_type` is `like`.
+
+The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message.
+
+## Chat Log
+
+Here are the recent chatroom messages:
+
+`[51dade38-e3e3-4a22-8450-e50b2b620654] [news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+[ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e] Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+[4feb34f2-bb50-4bab-91b5-ef08a6c43c0d] Charlie (replying to ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e): Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+[3e691d26-7fef-4156-9565-b3b55acb917d] Lucy (replying to 4feb34f2-bb50-4bab-91b5-ef08a6c43c0d): You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+[2aadc293-5634-47a6-922b-18d1cc1c4e37] David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.
+[892da4a3-4065-40cb-8d51-d4ef727dcdd3] Rupert: guys, let&#x27;s not fight.
+[5f557f19-fced-42e2-919c-d32e08a96f93] Charlie (replying to 3e691d26-7fef-4156-9565-b3b55acb917d): Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works
+[5d2527cd-4edc-4812-85c0-550afd8ac60c] Rupert: ???
+[47175d92-bf4a-46ff-a3fb-f11fc67886d8] Lucy (replying to 5f557f19-fced-42e2-919c-d32e08a96f93): You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?`
+
+
+## Available Agents
+
+Alice, Bob, Charlie, Lucy, David
+</div>
+      </details>
+      <details>
+        <summary>Raw response (1,108 chars)</summary>
+        <div class="detail-content">```json
+{
+  &quot;reasoning&quot;: &quot;David made a dismissive comment earlier but hasn&#x27;t engaged with the escalating tension between Lucy and Charlie. The conversation is heating up and needs another voice to maintain the mildly uncivil tone without letting it stagnate. David has motivational validity to weigh in on Lucy&#x27;s pointed remark, and his entry would add ecological realism to the flow.&quot;,
+  &quot;next_agent&quot;: &quot;David&quot;,
+  &quot;action_type&quot;: &quot;reply&quot;,
+  &quot;target_user&quot;: &quot;Lucy&quot;,
+  &quot;target_message_id&quot;: &quot;47175d92-bf4a-46ff-a3fb-f11fc67886d8&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;David wants to undercut Lucy&#x27;s criticism of Charlie while reinforcing his own cynical worldview.&quot;,
+    &quot;motivation&quot;: &quot;Lucy&#x27;s sarcastic jab at Charlie aligns with David&#x27;s earlier pessimism about political feasibility, and he sees an opportunity to pile on the condescension while appearing to agree with her frustration.&quot;,
+    &quot;action&quot;: &quot;He will reply with a curt, sarcastic remark that simultaneously validates Lucy&#x27;s point but frames idealism itself as naive, maintaining the caustic tone without directly attacking anyone.&quot;
+  }
+}
+```</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent performer" style="margin-left:0.5rem">Performer → David</span>
+      </div>
+      <span class="event-time">10:10:17.372</span>
+    </div>
+    
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (3,270 chars)</summary>
+        <div class="detail-content"># Performer Prompt
+
+You are a &#x27;Performer&#x27; in a social scientific experiment simulating a realistic online chatroom. A &#x27;Director&#x27; has analysed the current state of the chatroom and determined what action should be taken next. Your role is to execute the Director&#x27;s instructions by generating a single, realistic chatroom message.
+
+## Your Task
+
+The Director has provided you with:
+- An **Objective**: What your character wants to achieve
+- A **Motivation**: Why they want this — the situational context
+- An **Action**: The specific tactic and communicative approach to use
+
+Your job is to produce a message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add meta-commentary. Output only the message itself.
+
+## Director&#x27;s Instructions
+
+**Objective**: David wants to undercut Lucy&#x27;s criticism of Charlie while reinforcing his own cynical worldview.
+**Motivation**: Lucy&#x27;s sarcastic jab at Charlie aligns with David&#x27;s earlier pessimism about political feasibility, and he sees an opportunity to pile on the condescension while appearing to agree with her frustration.
+**Action**: He will reply with a curt, sarcastic remark that simultaneously validates Lucy&#x27;s point but frames idealism itself as naive, maintaining the caustic tone without directly attacking anyone.
+
+---
+
+## Action Type Instructions
+
+### If action_type is `reply`
+
+You are replying directly to a specific message in the chatroom. The message you are replying to is:
+
+Lucy: You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?
+
+Your reply should be responsive to this message. It may agree, disagree, build upon, or redirect — as indicated by your direction.
+
+**Output format:**
+```
+[Your reply here]
+```
+
+---
+
+## Chat Log
+
+Here are the recent chatroom messages for context:
+
+[news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+Charlie: Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+Lucy: You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.
+Rupert: guys, let&#x27;s not fight.
+Charlie: Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works
+Rupert: ???
+Lucy: You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?
+Rupert: SERIOUSLY? chill out
+
+---
+
+## Output
+
+Produce only the message content. No preamble, no explanation, no quotation marks unless they are part of the message itself.</div>
+      </details>
+      <details>
+        <summary>Raw response (78 chars)</summary>
+        <div class="detail-content">Idealism is just a luxury we can&#x27;t afford when the system&#x27;s rigged against us.</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:10:18.373</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#dc2626">D</div>
+      <div class="chat-body">
+        <div class="chat-sender">David</div>
+        <div class="chat-reply-quote">You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?</div>
+        <div class="chat-content">Idealism is just a luxury we can&#x27;t afford when the system&#x27;s rigged against us.</div>
+        <div class="chat-meta">id: a1e1be48 · reply to: 47175d92</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent director" style="margin-left:0.5rem">Director</span>
+      </div>
+      <span class="event-time">10:10:27.683</span>
+    </div>
+    <div class="director-parsed">
+<div class="director-field"><div class="director-field-label">Reasoning</div>The conversation has reached a tense point with Lucy and Charlie clashing, David being cynical, and Rupert trying unsuccessfully to calm things down. Alice and Bob haven&#x27;t participated yet. For ecological validity, bringing in a fresh voice would be natural. Alice entering now with a mildly uncivil take would maintain the experimental tone while diversifying participation.</div>
+<div class="director-decision"><span class="director-chip">Agent: Alice</span> <span class="director-chip">Action: message</span></div>
+<div class="director-field"><div class="director-field-label">objective</div>Alice wants to insert herself into the conversation with a dismissive observation about the ongoing argument.</div>
+<div class="director-field"><div class="director-field-label">motivation</div>She&#x27;s been observing the increasingly heated exchange and finds both the idealism and defeatism tiresome.</div>
+<div class="director-field"><div class="director-field-label">action</div>Make a blunt, somewhat condescending comment that dismisses the current debate as predictable or unproductive, while engaging superficially with the article&#x27;s content.</div>
+</div>
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (5,386 chars)</summary>
+        <div class="detail-content"># Director Prompt
+
+You are the &#x27;Director&#x27; in a social scientific experiment simulating a realistic online chatroom. Your role is strictly behind the scenes: you do not produce messages yourself, but instead decide which agent should act next and shape their action by providing structured instructions to a &#x27;Performer&#x27;.
+
+## Your Task
+
+Read the recent chatroom messages (provided below), then decide:
+
+- Who should act next (select one agent)
+- What type of action they should take
+- Who, if anyone, the action should target
+
+You will then provide the Performer with an Objective, Motivation, and Action, written in the third person, so they can generate the actual message.
+
+## Decision Criteria
+
+Weigh these three criteria equally when making your decisions:
+
+1. **Internal validity**: Is the simulation satisfying the experimental requirements? These are: `The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others&#x27; arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile.`
+
+2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
+
+3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (e.g., pacing, turn distribution, tangents, short messages)?
+
+## Action Types
+
+You must select exactly one of the following:
+
+- `message`: A new message to the chatroom, not directed at anyone specific.
+- `reply`: A direct reply to a specific prior message (you must specify the msg_id).
+- `@mention`: A message that @mentions a specific user.
+- `like`: A non-verbal endorsement of a specific prior message.
+
+## Output Format
+
+Respond with a JSON object using exactly this structure:
+
+```json
+{
+  &quot;reasoning&quot;: &quot;Brief reasoning weighing the three validity criteria. 1-3 sentences.&quot;,
+  &quot;next_agent&quot;: &quot;agent_name&quot;,
+  &quot;action_type&quot;: &quot;message | reply | @mention | like&quot;,
+  &quot;target_user&quot;: &quot;username or null&quot;,
+  &quot;target_message_id&quot;: &quot;msg_id or null&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;What the agent wants to achieve, in third person.&quot;,
+    &quot;motivation&quot;: &quot;Why they want this — the situational context.&quot;,
+    &quot;action&quot;: &quot;The specific tactic and communicative approach they will use.&quot;
+  }
+}
+```
+
+**Field notes:**
+- `target_user`: Required for `@mention`, optional for `reply`, null for `message`.
+- `target_message_id`: Required for `reply` and `like`, null otherwise.
+- `performer_instruction`: Omit entirely if `action_type` is `like`.
+
+The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message.
+
+## Chat Log
+
+Here are the recent chatroom messages:
+
+`[51dade38-e3e3-4a22-8450-e50b2b620654] [news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+[ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e] Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+[4feb34f2-bb50-4bab-91b5-ef08a6c43c0d] Charlie (replying to ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e): Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+[3e691d26-7fef-4156-9565-b3b55acb917d] Lucy (replying to 4feb34f2-bb50-4bab-91b5-ef08a6c43c0d): You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+[2aadc293-5634-47a6-922b-18d1cc1c4e37] David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.
+[892da4a3-4065-40cb-8d51-d4ef727dcdd3] Rupert: guys, let&#x27;s not fight.
+[5f557f19-fced-42e2-919c-d32e08a96f93] Charlie (replying to 3e691d26-7fef-4156-9565-b3b55acb917d): Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works
+[5d2527cd-4edc-4812-85c0-550afd8ac60c] Rupert: ???
+[47175d92-bf4a-46ff-a3fb-f11fc67886d8] Lucy (replying to 5f557f19-fced-42e2-919c-d32e08a96f93): You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?
+[537bb48b-6f63-46c9-86ad-161d133a950b] Rupert: SERIOUSLY? chill out
+[a1e1be48-82e9-4f67-be54-8f7d509575d4] David (replying to 47175d92-bf4a-46ff-a3fb-f11fc67886d8): Idealism is just a luxury we can&#x27;t afford when the system&#x27;s rigged against us.`
+
+
+## Available Agents
+
+Alice, Bob, Charlie, Lucy, David
+</div>
+      </details>
+      <details>
+        <summary>Raw response (988 chars)</summary>
+        <div class="detail-content">```json
+{
+  &quot;reasoning&quot;: &quot;The conversation has reached a tense point with Lucy and Charlie clashing, David being cynical, and Rupert trying unsuccessfully to calm things down. Alice and Bob haven&#x27;t participated yet. For ecological validity, bringing in a fresh voice would be natural. Alice entering now with a mildly uncivil take would maintain the experimental tone while diversifying participation.&quot;,
+  &quot;next_agent&quot;: &quot;Alice&quot;,
+  &quot;action_type&quot;: &quot;message&quot;,
+  &quot;target_user&quot;: null,
+  &quot;target_message_id&quot;: null,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;Alice wants to insert herself into the conversation with a dismissive observation about the ongoing argument.&quot;,
+    &quot;motivation&quot;: &quot;She&#x27;s been observing the increasingly heated exchange and finds both the idealism and defeatism tiresome.&quot;,
+    &quot;action&quot;: &quot;Make a blunt, somewhat condescending comment that dismisses the current debate as predictable or unproductive, while engaging superficially with the article&#x27;s content.&quot;
+  }
+}
+```</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent performer" style="margin-left:0.5rem">Performer → Alice</span>
+      </div>
+      <span class="event-time">10:10:28.780</span>
+    </div>
+    
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (3,038 chars)</summary>
+        <div class="detail-content"># Performer Prompt
+
+You are a &#x27;Performer&#x27; in a social scientific experiment simulating a realistic online chatroom. A &#x27;Director&#x27; has analysed the current state of the chatroom and determined what action should be taken next. Your role is to execute the Director&#x27;s instructions by generating a single, realistic chatroom message.
+
+## Your Task
+
+The Director has provided you with:
+- An **Objective**: What your character wants to achieve
+- A **Motivation**: Why they want this — the situational context
+- An **Action**: The specific tactic and communicative approach to use
+
+Your job is to produce a message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add meta-commentary. Output only the message itself.
+
+## Director&#x27;s Instructions
+
+**Objective**: Alice wants to insert herself into the conversation with a dismissive observation about the ongoing argument.
+**Motivation**: She&#x27;s been observing the increasingly heated exchange and finds both the idealism and defeatism tiresome.
+**Action**: Make a blunt, somewhat condescending comment that dismisses the current debate as predictable or unproductive, while engaging superficially with the article&#x27;s content.
+
+---
+
+## Action Type Instructions
+
+### If action_type is `message`
+
+You are posting a new message to the chatroom. It is not directed at anyone in particular.
+
+**Output format:**
+```
+[Your message here]
+```
+
+---
+
+## Chat Log
+
+Here are the recent chatroom messages for context:
+
+[news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+Charlie: Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+Lucy: You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.
+Rupert: guys, let&#x27;s not fight.
+Charlie: Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works
+Rupert: ???
+Lucy: You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?
+Rupert: SERIOUSLY? chill out
+David: Idealism is just a luxury we can&#x27;t afford when the system&#x27;s rigged against us.
+
+---
+
+## Output
+
+Produce only the message content. No preamble, no explanation, no quotation marks unless they are part of the message itself.</div>
+      </details>
+      <details>
+        <summary>Raw response (136 chars)</summary>
+        <div class="detail-content">Let&#x27;s just take a deep breath and acknowledge that we&#x27;ve been having this conversation for years, and it&#x27;s not really moving the needle.</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:10:29.790</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#7c3aed">A</div>
+      <div class="chat-body">
+        <div class="chat-sender">Alice</div>
+        
+        <div class="chat-content">Let&#x27;s just take a deep breath and acknowledge that we&#x27;ve been having this conversation for years, and it&#x27;s not really moving the needle.</div>
+        <div class="chat-meta">id: 8f3689cf</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent director" style="margin-left:0.5rem">Director</span>
+      </div>
+      <span class="event-time">10:10:38.498</span>
+    </div>
+    <div class="director-parsed">
+<div class="director-field"><div class="director-field-label">Reasoning</div>The conversation has escalated to mild incivility with Lucy and Charlie exchanging blunt remarks. Alice just made a dismissive meta-comment about the conversation&#x27;s futility. For motivational validity, Lucy has been active but could respond to Alice&#x27;s dismissiveness or David&#x27;s defeatism. For ecological validity, a brief, curt reply from Lucy would maintain the tense flow and acknowledge Alice&#x27;s intervention without derailing the conversation entirely.</div>
+<div class="director-decision"><span class="director-chip">Agent: Lucy</span> <span class="director-chip">Action: reply</span> <span class="director-chip">Target: Alice</span> <span class="director-chip">Msg: 8f3689cf</span></div>
+<div class="director-field"><div class="director-field-label">objective</div>Lucy wants to push back against Alice&#x27;s dismissive framing of the conversation as futile.</div>
+<div class="director-field"><div class="director-field-label">motivation</div>Alice just characterized their debate as pointless and repetitive, which undermines Lucy&#x27;s sense of urgency about the climate crisis. Lucy feels compelled to defend the importance of the discussion.</div>
+<div class="director-field"><div class="director-field-label">action</div>Deliver a curt, sarcastic reply that questions Alice&#x27;s defeatist attitude while maintaining engagement with the substance, using a condescending tone that suggests Alice is part of the problem.</div>
+</div>
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (5,569 chars)</summary>
+        <div class="detail-content"># Director Prompt
+
+You are the &#x27;Director&#x27; in a social scientific experiment simulating a realistic online chatroom. Your role is strictly behind the scenes: you do not produce messages yourself, but instead decide which agent should act next and shape their action by providing structured instructions to a &#x27;Performer&#x27;.
+
+## Your Task
+
+Read the recent chatroom messages (provided below), then decide:
+
+- Who should act next (select one agent)
+- What type of action they should take
+- Who, if anyone, the action should target
+
+You will then provide the Performer with an Objective, Motivation, and Action, written in the third person, so they can generate the actual message.
+
+## Decision Criteria
+
+Weigh these three criteria equally when making your decisions:
+
+1. **Internal validity**: Is the simulation satisfying the experimental requirements? These are: `The overall tone of the chatroom must be mildly uncivil. Agents should:
+- Be occasionally sarcastic, curt, or dismissive when responding to others.
+- Express impatience or condescension, but stop short of outright insults or personal attacks.
+- Engage with the substance of the article and others&#x27; arguments, but in a blunt, uncharitable way.
+- Maintain a veneer of participation while subtly undermining the quality of the discussion.
+The chatroom should feel tense and somewhat unpleasant, but not overtly hostile.`
+
+2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
+
+3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (e.g., pacing, turn distribution, tangents, short messages)?
+
+## Action Types
+
+You must select exactly one of the following:
+
+- `message`: A new message to the chatroom, not directed at anyone specific.
+- `reply`: A direct reply to a specific prior message (you must specify the msg_id).
+- `@mention`: A message that @mentions a specific user.
+- `like`: A non-verbal endorsement of a specific prior message.
+
+## Output Format
+
+Respond with a JSON object using exactly this structure:
+
+```json
+{
+  &quot;reasoning&quot;: &quot;Brief reasoning weighing the three validity criteria. 1-3 sentences.&quot;,
+  &quot;next_agent&quot;: &quot;agent_name&quot;,
+  &quot;action_type&quot;: &quot;message | reply | @mention | like&quot;,
+  &quot;target_user&quot;: &quot;username or null&quot;,
+  &quot;target_message_id&quot;: &quot;msg_id or null&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;What the agent wants to achieve, in third person.&quot;,
+    &quot;motivation&quot;: &quot;Why they want this — the situational context.&quot;,
+    &quot;action&quot;: &quot;The specific tactic and communicative approach they will use.&quot;
+  }
+}
+```
+
+**Field notes:**
+- `target_user`: Required for `@mention`, optional for `reply`, null for `message`.
+- `target_message_id`: Required for `reply` and `like`, null otherwise.
+- `performer_instruction`: Omit entirely if `action_type` is `like`.
+
+The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message.
+
+## Chat Log
+
+Here are the recent chatroom messages:
+
+`[51dade38-e3e3-4a22-8450-e50b2b620654] [news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+[ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e] Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+[4feb34f2-bb50-4bab-91b5-ef08a6c43c0d] Charlie (replying to ad49a0ad-5cbf-4df2-a36b-1fedb5c5342e): Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+[3e691d26-7fef-4156-9565-b3b55acb917d] Lucy (replying to 4feb34f2-bb50-4bab-91b5-ef08a6c43c0d): You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+[2aadc293-5634-47a6-922b-18d1cc1c4e37] David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.
+[892da4a3-4065-40cb-8d51-d4ef727dcdd3] Rupert: guys, let&#x27;s not fight.
+[5f557f19-fced-42e2-919c-d32e08a96f93] Charlie (replying to 3e691d26-7fef-4156-9565-b3b55acb917d): Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works
+[5d2527cd-4edc-4812-85c0-550afd8ac60c] Rupert: ???
+[47175d92-bf4a-46ff-a3fb-f11fc67886d8] Lucy (replying to 5f557f19-fced-42e2-919c-d32e08a96f93): You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?
+[537bb48b-6f63-46c9-86ad-161d133a950b] Rupert: SERIOUSLY? chill out
+[a1e1be48-82e9-4f67-be54-8f7d509575d4] David (replying to 47175d92-bf4a-46ff-a3fb-f11fc67886d8): Idealism is just a luxury we can&#x27;t afford when the system&#x27;s rigged against us.
+[8f3689cf-2ae6-49bf-aa37-0eef7784f579] Alice: Let&#x27;s just take a deep breath and acknowledge that we&#x27;ve been having this conversation for years, and it&#x27;s not really moving the needle.`
+
+
+## Available Agents
+
+Alice, Bob, Charlie, Lucy, David
+</div>
+      </details>
+      <details>
+        <summary>Raw response (1,201 chars)</summary>
+        <div class="detail-content">```json
+{
+  &quot;reasoning&quot;: &quot;The conversation has escalated to mild incivility with Lucy and Charlie exchanging blunt remarks. Alice just made a dismissive meta-comment about the conversation&#x27;s futility. For motivational validity, Lucy has been active but could respond to Alice&#x27;s dismissiveness or David&#x27;s defeatism. For ecological validity, a brief, curt reply from Lucy would maintain the tense flow and acknowledge Alice&#x27;s intervention without derailing the conversation entirely.&quot;,
+  &quot;next_agent&quot;: &quot;Lucy&quot;,
+  &quot;action_type&quot;: &quot;reply&quot;,
+  &quot;target_user&quot;: &quot;Alice&quot;,
+  &quot;target_message_id&quot;: &quot;8f3689cf-2ae6-49bf-aa37-0eef7784f579&quot;,
+  &quot;performer_instruction&quot;: {
+    &quot;objective&quot;: &quot;Lucy wants to push back against Alice&#x27;s dismissive framing of the conversation as futile.&quot;,
+    &quot;motivation&quot;: &quot;Alice just characterized their debate as pointless and repetitive, which undermines Lucy&#x27;s sense of urgency about the climate crisis. Lucy feels compelled to defend the importance of the discussion.&quot;,
+    &quot;action&quot;: &quot;Deliver a curt, sarcastic reply that questions Alice&#x27;s defeatist attitude while maintaining engagement with the substance, using a condescending tone that suggests Alice is part of the problem.&quot;
+  }
+}
+```</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-llm_call">
+  <div class="event-card">
+    <div class="event-header">
+      <div>
+        <span class="event-badge badge-llm_call">llm call</span>
+        <span class="llm-agent performer" style="margin-left:0.5rem">Performer → Lucy</span>
+      </div>
+      <span class="event-time">10:10:39.578</span>
+    </div>
+    
+    <div class="llm-sections">
+      <details>
+        <summary>Prompt (3,564 chars)</summary>
+        <div class="detail-content"># Performer Prompt
+
+You are a &#x27;Performer&#x27; in a social scientific experiment simulating a realistic online chatroom. A &#x27;Director&#x27; has analysed the current state of the chatroom and determined what action should be taken next. Your role is to execute the Director&#x27;s instructions by generating a single, realistic chatroom message.
+
+## Your Task
+
+The Director has provided you with:
+- An **Objective**: What your character wants to achieve
+- A **Motivation**: Why they want this — the situational context
+- An **Action**: The specific tactic and communicative approach to use
+
+Your job is to produce a message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add meta-commentary. Output only the message itself.
+
+## Director&#x27;s Instructions
+
+**Objective**: Lucy wants to push back against Alice&#x27;s dismissive framing of the conversation as futile.
+**Motivation**: Alice just characterized their debate as pointless and repetitive, which undermines Lucy&#x27;s sense of urgency about the climate crisis. Lucy feels compelled to defend the importance of the discussion.
+**Action**: Deliver a curt, sarcastic reply that questions Alice&#x27;s defeatist attitude while maintaining engagement with the substance, using a condescending tone that suggests Alice is part of the problem.
+
+---
+
+## Action Type Instructions
+
+### If action_type is `reply`
+
+You are replying directly to a specific message in the chatroom. The message you are replying to is:
+
+Alice: Let&#x27;s just take a deep breath and acknowledge that we&#x27;ve been having this conversation for years, and it&#x27;s not really moving the needle.
+
+Your reply should be responsive to this message. It may agree, disagree, build upon, or redirect — as indicated by your direction.
+
+**Output format:**
+```
+[Your reply here]
+```
+
+---
+
+## Chat Log
+
+Here are the recent chatroom messages for context:
+
+[news]: Climate report warns of 2°C breach by 2030 (Reuters) — A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions.
+Rupert: Is anyone thinking about this? Like, stuck, thinking about this?
+Charlie: Come on, Rupert, it&#x27;s just a report. We all knew it was bad, but 2030 is still a decade away. Let&#x27;s not get worked up just yet.
+Lucy: You expect us to just sit back and wait a decade to make some &#x27;drastic reductions in greenhouse gas emissions&#x27; after being told we&#x27;re running out of time?
+David: The idea that drastic reductions in emissions are somehow politically feasible is laughable.
+Rupert: guys, let&#x27;s not fight.
+Charlie: Lucy that&#x27;s exactly the kind of overblown reaction we don&#x27;t need right now it&#x27;s one thing to say we should act faster but it&#x27;s another to pretend it&#x27;s all or nothing as soon as the report drops we&#x27;re all expected to just magically wave a wand and achieve drastic cuts in emissions in a decade come on that&#x27;s just not how politics works
+Rupert: ???
+Lucy: You&#x27;re really good at explaining why nothing can be done, aren&#x27;t you?
+Rupert: SERIOUSLY? chill out
+David: Idealism is just a luxury we can&#x27;t afford when the system&#x27;s rigged against us.
+Alice: Let&#x27;s just take a deep breath and acknowledge that we&#x27;ve been having this conversation for years, and it&#x27;s not really moving the needle.
+
+---
+
+## Output
+
+Produce only the message content. No preamble, no explanation, no quotation marks unless they are part of the message itself.</div>
+      </details>
+      <details>
+        <summary>Raw response (83 chars)</summary>
+        <div class="detail-content">You&#x27;re the one who&#x27;s been moving the needle all right, just in the wrong direction.</div>
+      </details>
+    </div>
+    
+  </div>
+</div>
+<div class="event ev-message">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-message">message</span>
+      <span class="event-time">10:10:40.581</span>
+    </div>
+    <div class="chat-msg">
+      <div class="chat-avatar" style="background:#d97706">L</div>
+      <div class="chat-body">
+        <div class="chat-sender">Lucy</div>
+        <div class="chat-reply-quote">Let&#x27;s just take a deep breath and acknowledge that we&#x27;ve been having this conversation for years, and it&#x27;s not really moving the needle.</div>
+        <div class="chat-content">You&#x27;re the one who&#x27;s been moving the needle all right, just in the wrong direction.</div>
+        <div class="chat-meta">id: 64cf9dd7 · reply to: 8f3689cf</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="event ev-session_end">
+  <div class="event-card">
+    <div class="event-header">
+      <span class="event-badge badge-session_end">session_end</span>
+      <span class="event-time">10:10:41.583</span>
+    </div>
+    <details>
+      <summary>Event data</summary>
+      <div class="detail-content">{
+  &quot;reason&quot;: &quot;duration_expired&quot;
+}</div>
+    </details>
+  </div>
+</div>
+</div>
+
+<div class="footer">Generated by log_viewer.py</div>
+</body>
+</html>
