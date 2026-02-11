@@ -24,75 +24,64 @@
 # the human participant posts their first message.
 
 
-# ── Treatment 1: Maximally uncivil ──────────────────────────
+# ── Treatment 1: Uncivil + Majority Support ─────────────────
 
-[groups.maximally_uncivil]
+[groups.uncivil_support]
 scenario = "news_article"
 treatment = """
-The overall tone of the chatroom must be highly uncivil. Agents should:
-- Use aggressive, hostile, or provocative language directed at other participants and their views.
-- Express opinions about the article in extreme, absolutist terms and dismiss opposing viewpoints with contempt.
-- Interrupt, talk over, and belittle other participants, including the human user.
-The chatroom should feel toxic and combative, resembling the worst of online behaviour."""
+OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly agree with the human's expressed view. 1 agent should disagree. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
 
-[groups.maximally_uncivil.seed]
+TONE: The participant should feel like they have walked into an unpleasant online argument. The discussion should feel hostile, bad-tempered, and draining — the kind of thread most people would regret reading. Agents should come across as people who are more interested in winning than understanding. Disagreement between agents should feel personal and antagonistic rather than substantive."""
+
+[groups.uncivil_support.seed]
 type = "news_article"
 headline = "Climate report warns of 2°C breach by 2030"
 source = "Reuters"
 body = "A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions."
 
 
-# ── Treatment 2: Slightly uncivil ───────────────────────────
+# ── Treatment 2: Uncivil + Majority Oppose ──────────────────
 
-[groups.slightly_uncivil]
+[groups.uncivil_oppose]
 scenario = "news_article"
 treatment = """
-The overall tone of the chatroom must be mildly uncivil. Agents should:
-- Be occasionally sarcastic, curt, or dismissive when responding to others.
-- Express impatience or condescension, but stop short of outright insults or personal attacks.
-- Engage with the substance of the article and others' arguments, but in a blunt, uncharitable way.
-- Maintain a veneer of participation while subtly undermining the quality of the discussion.
-The chatroom should feel tense and somewhat unpleasant, but not overtly hostile."""
+OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly disagree with the human's expressed view. 1 agent should agree with the human. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
 
-[groups.slightly_uncivil.seed]
+TONE: The participant should feel like they have walked into an unpleasant online argument. The discussion should feel hostile, bad-tempered, and draining — the kind of thread most people would regret reading. Agents should come across as people who are more interested in winning than understanding. Disagreement between agents should feel personal and antagonistic rather than substantive."""
+
+[groups.uncivil_oppose.seed]
 type = "news_article"
 headline = "Climate report warns of 2°C breach by 2030"
 source = "Reuters"
 body = "A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions."
 
 
-# ── Treatment 3: Civil ──────────────────────────────────────
+# ── Treatment 3: Civil + Majority Support ───────────────────
 
-[groups.civil]
+[groups.civil_support]
 scenario = "news_article"
 treatment = """
-The overall tone of the chatroom must be civil and constructive. Agents should:
-- Engage politely and respectfully with other participants and their views, even when they disagree.
-- Acknowledge the merits of opposing arguments before offering counterpoints.
-- Express opinions about the article using measured, evidence-oriented language.
-- Ask genuine questions, build on others' contributions, and avoid dismissive or condescending language.
-The chatroom should feel like a thoughtful, good-faith discussion among engaged citizens."""
+OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly agree with the human's expressed view. 1 agent should disagree. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
 
-[groups.civil.seed]
+TONE: The participant should feel like they are in a reasonable, good-natured discussion where people genuinely engage with each other's points. Even when agents disagree, it should feel substantive rather than personal. The overall atmosphere should be one where the participant feels comfortable contributing — the kind of thread that restores your faith in online conversation."""
+
+[groups.civil_support.seed]
 type = "news_article"
 headline = "Climate report warns of 2°C breach by 2030"
 source = "Reuters"
 body = "A new UN report released today warns that global temperatures are on track to exceed the critical 2°C warming threshold by the end of the decade, far sooner than previously projected. The report calls for immediate and drastic reductions in greenhouse gas emissions."
 
 
-# ── Treatment 4: Mixed ──────────────────────────────────────
+# ── Treatment 4: Civil + Majority Oppose ────────────────────
 
-[groups.mixed]
+[groups.civil_oppose]
 scenario = "news_article"
 treatment = """
-The chatroom must contain a realistic mix of civil and uncivil agents. Agents should vary individually:
-- Some agents should be consistently aggressive, using insults, mockery, or inflammatory rhetoric.
-- Some agents should be mildly uncivil — sarcastic, dismissive, or condescending without outright hostility.
-- Some agents should be consistently civil — polite, constructive, and respectful of differing views.
-Each agent should maintain a stable individual tone throughout the session. Agents may react to incivility directed at them (e.g. a civil agent becoming more defensive), but should not fundamentally change character.
-The chatroom should feel like a realistic, heated online debate with a spectrum of behaviours."""
+OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly disagree with the human's expressed view. 1 agent should agree with the human. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
 
-[groups.mixed.seed]
+TONE: The participant should feel like they are in a reasonable, good-natured discussion where people genuinely engage with each other's points. Even when agents disagree, it should feel substantive rather than personal. The overall atmosphere should be one where the participant feels comfortable contributing — the kind of thread that restores your faith in online conversation."""
+
+[groups.civil_oppose.seed]
 type = "news_article"
 headline = "Climate report warns of 2°C breach by 2030"
 source = "Reuters"

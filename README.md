@@ -19,11 +19,13 @@ This separation allows the Performer to be fine-tuned for realistic online speec
 ```bash
 cd backend
 pip install -e .
-# Create backend/.env with API keys:
+# Create backend/.env with API keys (see .env.example):
 echo 'ANTHROPIC_API_KEY=your_key_here' > .env
-echo 'HF_API_TOKEN=your_key_here' >> .env
+echo 'HF_API_KEY=your_key_here' >> .env
+echo 'GEMINI_API_KEY=your_key_here' >> .env
 python main.py
 ```
+Which keys you need depends on the providers configured in [simulation_settings.toml](./backend/config/simulation_settings.toml). The defaults use Anthropic (Director) and HuggingFace (Performer). Gemini is available as an alternative provider.
 
 ### Frontend
 ```bash

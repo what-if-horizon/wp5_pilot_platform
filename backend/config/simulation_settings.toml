@@ -23,12 +23,15 @@ typing_delay_seconds = 1.0
 ### DIRECTOR LLM SETTINGS ###
 # The Director is a large reasoning model that decides which agent acts,
 # selects the action type, and provides structured instructions to the Performer.
-director_llm_provider = "anthropic"
+# current providers: "anthropic", "huggingface", "gemini"
+director_llm_provider = "anthropic" 
 director_llm_model = "claude-sonnet-4-5"
+
 
 ### PERFORMER LLM SETTINGS ###
 # The Performer is a fine-tuned instruction model that generates the actual
 # chatroom message based on the Director's instructions.
+# current providers: "anthropic", "huggingface", "gemini"
 performer_llm_provider = "huggingface"
 performer_llm_model = "meta-llama/Llama-3.1-8B-Instruct"
 

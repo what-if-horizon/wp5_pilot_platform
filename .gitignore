@@ -16,7 +16,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+backend/lib/
 lib64/
 parts/
 sdist/
@@ -45,6 +45,7 @@ backend/.env
 backend/logs/*.json
 backend/logs/*.jsonl
 backend/logs/used_tokens.jsonl
+backend/logs/*.html
 
 # Testing
 .pytest_cache/
