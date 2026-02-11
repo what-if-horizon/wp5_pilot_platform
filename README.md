@@ -8,8 +8,8 @@ Platform for integrating AI agents into simulated social media environments to s
 
 The platform is powered by **STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments), a multi-agent coordination framework that separates agent coordination from message generation duties:
 
-- A **Director** (general reasoning model, currently Opus 4.5) analyses the chatroom state and decides which agent should act, what action to take, and provides structured instructions.
-- A **Performer** (instruction fine-tuned model, currently Llama-3.1-8B-Instruct) generates the actual chatroom message from the Director's instructions
+- A **Director** (general reasoning model) analyses the chatroom state and decides which agent should act, what action to take, and provides structured instructions.
+- A **Performer** (instruction fine-tuned model) generates the actual chatroom message from the Director's instructions
 
 This separation allows the Performer to be fine-tuned for realistic online speech without compromising the Director's capacity for managing experimental conditions and multi-agent coordination. See the [backend documentation](./backend/README.md) for full details.
 

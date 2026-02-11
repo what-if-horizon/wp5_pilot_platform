@@ -13,8 +13,8 @@ All session activity is logged for research purposes.
 
 | Component | Model | Role |
 |-----------|-------|------|
-| **Director** | e.g., Claude Opus 4.5 | Decides which agent acts, selects action type, and provides structured instructions |
-| **Performer** | Llama 3.1 8B  | Generates the actual chatroom message from the Director's instructions |
+| **Director** | general reasoning | Decides which agent acts, selects action type, and provides structured instructions |
+| **Performer** | (instruction) fine-tuned  | Generates the actual chatroom message from the Director's instructions |
 
 **Why two models?** Fine-tuning the Performer on social media data produces realistic online speech but degrades the general reasoning needed for goal-oriented multi-agent orchestration. By isolating content generation from strategic reasoning, each model can be optimised independently.
 
