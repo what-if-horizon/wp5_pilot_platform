@@ -29,14 +29,15 @@ def format_chat_log(messages: List[Message]) -> str:
     return "\n".join(lines)
 
 
-def build_director_prompt(treatment: str, messages: List[Message], agents: List[Agent]) -> str:
-    """Build the full Director prompt by injecting treatment and chat log."""
+def build_director_prompt(treatment: str, messages: List[Message], agents: List[Agent], human_user: str = "user") -> str:
+    """Build the full Director prompt by injecting treatment, chat log, and human user name."""
     chat_log = format_chat_log(messages)
     agent_names = ", ".join(a.name for a in agents)
 
     prompt = _TEMPLATE
     prompt = prompt.replace("{TREATMENT GOES HERE}", treatment)
     prompt = prompt.replace("{CHAT LOG GOES HERE}", chat_log)
+    prompt = prompt.replace("{HUMAN_USER}", human_user)
 
     # Append the list of available agent names so the Director knows who it can select
     prompt += f"\n\n## Available Agents\n\n{agent_names}\n"

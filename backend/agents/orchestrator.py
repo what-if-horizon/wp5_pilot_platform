@@ -54,7 +54,7 @@ class Orchestrator:
         agents = self.state.agents
 
         # 2. Build and send the Director prompt
-        director_prompt = build_director_prompt(treatment, recent, agents)
+        director_prompt = build_director_prompt(treatment, recent, agents, human_user=self.state.user_name)
         director_raw = None
         try:
             director_raw = await self.director_llm.generate_response(director_prompt, max_retries=1)
