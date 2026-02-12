@@ -11,11 +11,12 @@ load_dotenv()
 class GeminiClient:
     """Client for interacting with Google Gemini API (sync + async helpers)."""
 
-    def __init__(self, model_name: str = "gemini-2.0-flash"):
+    def __init__(self, model_name: str = "gemini-2.0-flash", temperature: float = None):
         """
         Initialize Gemini client. Creates both a sync client and an async wrapper (.aio).
         """
         self.model_name = model_name
+        self.temperature = temperature
         # create sync client (underlying genai Client)
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         # async client wrapper (per genai docs)
@@ -37,10 +38,13 @@ class GeminiClient:
 
         while attempts <= max_retries:
             try:
-                response = self.client.models.generate_content(
+                kwargs = dict(
                     model=self.model_name,
                     contents=prompt,
                 )
+                if self.temperature is not None:
+                    kwargs["config"] = {"temperature": self.temperature}
+                response = self.client.models.generate_content(**kwargs)
                 return response.text
 
             except Exception as e:
@@ -65,10 +69,13 @@ class GeminiClient:
         while attempts <= max_retries:
             try:
                 if self.aclient is not None:
-                    resp = await self.aclient.models.generate_content(
+                    kwargs = dict(
                         model=self.model_name,
                         contents=prompt,
                     )
+                    if self.temperature is not None:
+                        kwargs["config"] = {"temperature": self.temperature}
+                    resp = await self.aclient.models.generate_content(**kwargs)
                     return getattr(resp, "text", None)
                 else:
                     # Fallback: run sync client in executor

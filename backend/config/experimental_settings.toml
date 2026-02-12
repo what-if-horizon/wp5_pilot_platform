@@ -30,7 +30,6 @@
 scenario = "news_article"
 treatment = """
 OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly agree with the human's expressed view. 1 agent should disagree. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
-
 TONE: The participant should feel like they have walked into an unpleasant online argument. The discussion should feel hostile, bad-tempered, and draining — the kind of thread most people would regret reading. Agents should come across as people who are more interested in winning than understanding. Disagreement between agents should feel personal and antagonistic rather than substantive."""
 
 [groups.uncivil_support.seed]
@@ -46,7 +45,6 @@ body = "A new UN report released today warns that global temperatures are on tra
 scenario = "news_article"
 treatment = """
 OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly disagree with the human's expressed view. 1 agent should agree with the human. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
-
 TONE: The participant should feel like they have walked into an unpleasant online argument. The discussion should feel hostile, bad-tempered, and draining — the kind of thread most people would regret reading. Agents should come across as people who are more interested in winning than understanding. Disagreement between agents should feel personal and antagonistic rather than substantive."""
 
 [groups.uncivil_oppose.seed]
@@ -62,7 +60,6 @@ body = "A new UN report released today warns that global temperatures are on tra
 scenario = "news_article"
 treatment = """
 OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly agree with the human's expressed view. 1 agent should disagree. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
-
 TONE: The participant should feel like they are in a reasonable, good-natured discussion where people genuinely engage with each other's points. Even when agents disagree, it should feel substantive rather than personal. The overall atmosphere should be one where the participant feels comfortable contributing — the kind of thread that restores your faith in online conversation."""
 
 [groups.civil_support.seed]
@@ -78,7 +75,6 @@ body = "A new UN report released today warns that global temperatures are on tra
 scenario = "news_article"
 treatment = """
 OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly disagree with the human's expressed view. 1 agent should agree with the human. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
-
 TONE: The participant should feel like they are in a reasonable, good-natured discussion where people genuinely engage with each other's points. Even when agents disagree, it should feel substantive rather than personal. The overall atmosphere should be one where the participant feels comfortable contributing — the kind of thread that restores your faith in online conversation."""
 
 [groups.civil_oppose.seed]

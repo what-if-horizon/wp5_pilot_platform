@@ -6,16 +6,22 @@ from .llm_huggingface import HuggingFaceClient
 from .llm_anthropic import AnthropicClient
 
 
-def _create_client(provider: str, model: str = None):
+def _create_client(provider: str, model: str = None, temperature: float = None):
     """Create an LLM client for the given provider and optional model name."""
     provider = (provider or "gemini").lower()
 
+    kwargs = {}
+    if model:
+        kwargs["model_name"] = model
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+
     if provider == "huggingface":
-        return HuggingFaceClient(model_name=model) if model else HuggingFaceClient()
+        return HuggingFaceClient(**kwargs)
     elif provider == "gemini":
-        return GeminiClient(model_name=model) if model else GeminiClient()
+        return GeminiClient(**kwargs)
     elif provider == "anthropic":
-        return AnthropicClient(model_name=model) if model else AnthropicClient()
+        return AnthropicClient(**kwargs)
     else:
         raise RuntimeError(f"Unknown llm_provider: '{provider}'. Supported: 'gemini', 'huggingface', 'anthropic'")
 
@@ -66,8 +72,9 @@ class LLMManager:
             if role:
                 provider = simulation_config.get(f"{role}_llm_provider")
                 model = simulation_config.get(f"{role}_llm_model")
+                temperature = simulation_config.get(f"{role}_temperature")
                 if provider:
-                    client = _create_client(provider, model)
+                    client = _create_client(provider, model, temperature=temperature)
             if client is None:
                 client = _create_client_from_config(simulation_config)
         return cls(simulation_config["llm_concurrency_limit"], client=client)

@@ -114,6 +114,13 @@ def validate_sim_config(path: str) -> dict:
             if not isinstance(val, str) or not val.strip():
                 raise ValueError(f"'{key}' must be a non-empty string")
 
+        # director_temperature / performer_temperature: float in [0, 2] (optional, default 1.0)
+        for tkey in ["director_temperature", "performer_temperature"]:
+            tv = float(cfg.get(tkey, 1.0))
+            if not (0.0 <= tv <= 2.0):
+                raise ValueError(f"'{tkey}' must be between 0.0 and 2.0")
+            cfg[tkey] = tv
+
         # context_window_size: positive int
         cws = int(cfg["context_window_size"])
         if cws <= 0:

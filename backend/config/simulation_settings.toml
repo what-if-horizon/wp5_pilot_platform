@@ -4,14 +4,15 @@
 
 ### SESSION SETTINGS ###
 # Reproducibility seed
-random_seed = 42
+# Controls: simulation tick pass/fail gate (messages_per_minute). 
+random_seed = 42 
 # - session_duration_minutes: max. duration of the simulation session in minutes
 session_duration_minutes = 2
 
 ### AGENT SPACE ###
 # - num_agents: total agents in the session (int)
 num_agents = 5
-# - agent_names: corresponding list of agent names to instantiate (list of strings, length must match num_agents).
+# - agent_names:list of agent names (list of strings, len = num_agents).
 agent_names = ["Alice", "Bob", "Charlie", "Lucy", "David"]
 
 ### AGENT PACING ###
@@ -24,9 +25,9 @@ typing_delay_seconds = 1.0
 # The Director is a large reasoning model that decides which agent acts,
 # selects the action type, and provides structured instructions to the Performer.
 # current providers: "anthropic", "huggingface", "gemini"
-director_llm_provider = "anthropic" 
+director_llm_provider = "anthropic"
 director_llm_model = "claude-sonnet-4-5"
-
+director_temperature = 0.5
 
 ### PERFORMER LLM SETTINGS ###
 # The Performer is a fine-tuned instruction model that generates the actual
@@ -34,6 +35,7 @@ director_llm_model = "claude-sonnet-4-5"
 # current providers: "anthropic", "huggingface", "gemini"
 performer_llm_provider = "huggingface"
 performer_llm_model = "meta-llama/Llama-3.1-8B-Instruct"
+performer_temperature = 0.5
 
 ### SHARED LLM SETTINGS ###
 # - context_window_size: how many recent messages to include in prompts (int)

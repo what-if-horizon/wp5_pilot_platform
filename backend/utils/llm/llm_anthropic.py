@@ -11,8 +11,9 @@ load_dotenv()
 class AnthropicClient:
     """Client for interacting with the Anthropic API (sync + async)."""
 
-    def __init__(self, model_name: str = "claude-sonnet-4-5"):
+    def __init__(self, model_name: str = "claude-sonnet-4-5", temperature: float = None):
         self.model_name = model_name
+        self.temperature = temperature
         api_key = os.getenv("ANTHROPIC_API_KEY")
 
         # Create sync client
@@ -31,13 +32,16 @@ class AnthropicClient:
 
         while attempts <= max_retries:
             try:
-                message = self.client.messages.create(
+                kwargs = dict(
                     model=self.model_name,
                     max_tokens=1024,
                     messages=[
                         {"role": "user", "content": prompt}
                     ],
                 )
+                if self.temperature is not None:
+                    kwargs["temperature"] = self.temperature
+                message = self.client.messages.create(**kwargs)
                 return message.content[0].text
 
             except Exception as e:
@@ -58,13 +62,16 @@ class AnthropicClient:
         while attempts <= max_retries:
             try:
                 if self.aclient is not None:
-                    message = await self.aclient.messages.create(
+                    kwargs = dict(
                         model=self.model_name,
                         max_tokens=1024,
                         messages=[
                             {"role": "user", "content": prompt}
                         ],
                     )
+                    if self.temperature is not None:
+                        kwargs["temperature"] = self.temperature
+                    message = await self.aclient.messages.create(**kwargs)
                     return message.content[0].text
                 else:
                     # Fallback: run sync client in executor

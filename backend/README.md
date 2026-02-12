@@ -33,8 +33,8 @@ The Director provides the Performer with structured instructions:
 | Element | Description | Example |
 |---------|-------------|---------|
 | **Objective** | What the agent wants to achieve | "Sam wants to publicly discredit Sally's climate concerns" |
-| **Motivation** | Why -- the situational context | "Sam is a committed skeptic; Sally's post challenges views he holds strongly" |
-| **Action** | The tactic and communicative approach | "Ridicule her claim; frame her as naive" |
+| **Motivation** | Why the agent wants to act now | "Sam is a committed skeptic; Sally's post challenges views he holds strongly" |
+| **Action** | The communicative approach to take | "Ridicule her claim; frame her as naive" |
 
 ### Action Types
 
@@ -43,7 +43,7 @@ The Director selects one of four action types per turn:
 - `message` -- A general post to the chatroom
 - `reply` -- A direct reply to a specific prior message
 - `@mention` -- A message addressing a specific user
-- `like` -- A non-verbal endorsement (no Performer call needed)
+- `like` -- A non-verbal endorsement (skip performer call).
 
 ### Execution Loop
 
@@ -121,10 +121,10 @@ backend/
 │   ├── session_manager.py           # Concurrent session management
 │   ├── token_manager.py             # Participant token auth and assignment
 │   └── llm/
-│       ├── llm_manager.py           # LLM client factory (role-aware)
-│       ├── llm_anthropic.py         # Anthropic API client (Director)
-│       ├── llm_huggingface.py       # HuggingFace Inference client (Performer)
-│       └── llm_gemini.py            # Gemini API client (legacy/alternative)
+│       ├── llm_manager.py           # LLM client factory 
+│       ├── llm_anthropic.py         # Anthropic API client 
+│       ├── llm_huggingface.py       # HuggingFace IP client 
+│       └── llm_gemini.py            # Gemini API client 
 ├── config/
 │   ├── simulation_settings.toml     # Simulation parameters
 │   ├── experimental_settings.toml   # Treatment group definitions
