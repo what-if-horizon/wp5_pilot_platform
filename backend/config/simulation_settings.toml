@@ -7,7 +7,7 @@
 # Controls: simulation tick pass/fail gate (messages_per_minute). 
 random_seed = 42 
 # - session_duration_minutes: max. duration of the simulation session in minutes
-session_duration_minutes = 2
+session_duration_minutes = 1
 
 ### AGENT SPACE ###
 # - num_agents: total agents in the session (int)
@@ -17,7 +17,7 @@ agent_names = ["Alice", "Bob", "Charlie", "Lucy", "David"]
 
 ### AGENT PACING ###
 # - messages_per_minute: background message rate (int)
-messages_per_minute = 10
+messages_per_minute = 50
 # - typing_delay_seconds: fixed delay before posting a message, simulates typing (float, 0 to disable)
 typing_delay_seconds = 1.0
 
@@ -27,7 +27,7 @@ typing_delay_seconds = 1.0
 # current providers: "anthropic", "huggingface", "gemini"
 director_llm_provider = "anthropic"
 director_llm_model = "claude-sonnet-4-5"
-director_temperature = 0.5
+director_temperature = 1
 
 ### PERFORMER LLM SETTINGS ###
 # The Performer is a fine-tuned instruction model that generates the actual
@@ -35,10 +35,10 @@ director_temperature = 0.5
 # current providers: "anthropic", "huggingface", "gemini"
 performer_llm_provider = "huggingface"
 performer_llm_model = "meta-llama/Llama-3.1-8B-Instruct"
-performer_temperature = 0.5
+performer_temperature = 1
 
 ### SHARED LLM SETTINGS ###
 # - context_window_size: how many recent messages to include in prompts (int)
-context_window_size = 15
+context_window_size = 20
 # - llm_concurrency_limit: per-process limit of concurrent LLM requests (must be a positive integer > 0)
 llm_concurrency_limit = 5

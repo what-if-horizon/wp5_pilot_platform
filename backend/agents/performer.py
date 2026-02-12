@@ -1,4 +1,4 @@
-import json
+import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -9,39 +9,40 @@ from models import Message
 _TEMPLATE_PATH = Path(__file__).parent / "prompts" / "performer_prompt.md"
 _RAW_TEMPLATE = _TEMPLATE_PATH.read_text(encoding="utf-8")
 
-# Pre-extract the action-type blocks from the template
-_MESSAGE_BLOCK = """### If action_type is `message`
 
-You are posting a new message to the chatroom. It is not directed at anyone in particular.
+def _parse_template(raw: str):
+    """Parse the performer prompt template into a base template and action-type blocks.
 
-**Output format:**
-```
-[Your message here]
-```"""
+    The .md template marks each action-type block with:
+        `{ACTION_TYPE_BLOCK: <name>}`  — starts a block
+        `{END_ACTION_TYPE_BLOCKS}`     — ends the last block
 
-_REPLY_BLOCK_TEMPLATE = """### If action_type is `reply`
+    This extracts them into a dict keyed by action type name, and builds a
+    base template with a single {ACTION_BLOCK} placeholder where the selected
+    block will be injected at runtime.
+    """
+    # Extract each block: content between `{ACTION_TYPE_BLOCK: X}` markers
+    blocks = {}
+    block_re = re.compile(
+        r"`\{ACTION_TYPE_BLOCK:\s*([^}]+)\}`\s*\n(.*?)(?=`\{ACTION_TYPE_BLOCK:|`\{END_ACTION_TYPE_BLOCKS\}`)",
+        re.DOTALL,
+    )
+    for m in block_re.finditer(raw):
+        blocks[m.group(1).strip()] = m.group(2).strip()
 
-You are replying directly to a specific message in the chatroom. The message you are replying to is:
+    # Replace everything from the first ACTION_TYPE_BLOCK marker through
+    # END_ACTION_TYPE_BLOCKS with a single placeholder
+    base = re.sub(
+        r"`\{ACTION_TYPE_BLOCK:.*?`\{END_ACTION_TYPE_BLOCKS\}`",
+        "{ACTION_BLOCK}",
+        raw,
+        flags=re.DOTALL,
+    )
 
-{TARGET_MESSAGE_CONTENT}
+    return base, blocks
 
-Your reply should be responsive to this message. It may agree, disagree, build upon, or redirect — as indicated by your direction.
 
-**Output format:**
-```
-[Your reply here]
-```"""
-
-_MENTION_BLOCK_TEMPLATE = """### If action_type is `@mention`
-
-You are posting a message that directly @mentions another user: **@{TARGET_USER}**
-
-Your message should address this user specifically. The @mention will be automatically prepended to your message, so do not include it yourself.
-
-**Output format:**
-```
-[Your message here, without the @mention]
-```"""
+_BASE_TEMPLATE, _ACTION_BLOCKS = _parse_template(_RAW_TEMPLATE)
 
 
 def _format_chat_log(messages: List[Message]) -> str:
@@ -51,7 +52,10 @@ def _format_chat_log(messages: List[Message]) -> str:
 
     lines = []
     for m in messages:
-        lines.append(f"{m.sender}: {m.content}")
+        line = f"{m.sender}: {m.content}"
+        if m.liked_by:
+            line += f" [liked by {', '.join(sorted(m.liked_by))}]"
+        lines.append(line)
     return "\n".join(lines)
 
 
@@ -76,65 +80,26 @@ def build_performer_prompt(
 ) -> str:
     """Build the full Performer prompt from the Director's output.
 
-    Assembles the prompt by injecting the Director's instruction, the
-    appropriate action-type block, and the chat log.
+    Selects the appropriate action-type block from the parsed template,
+    injects dynamic values, and fills the base template placeholders.
     """
-    # Format the instruction block
-    instruction_text = _format_instruction(instruction)
+    # Select the action-type block (fall back to 'message' for unknown types)
+    action_block = _ACTION_BLOCKS.get(action_type, _ACTION_BLOCKS["message"])
 
-    # Select the appropriate action-type block
-    if action_type == "message":
-        action_block = _MESSAGE_BLOCK
-    elif action_type == "reply":
+    # Substitute dynamic values within the selected block
+    if action_type == "reply":
         target_content = "(message not found)"
         if target_message:
             target_content = f"{target_message.sender}: {target_message.content}"
-        action_block = _REPLY_BLOCK_TEMPLATE.replace("{TARGET_MESSAGE_CONTENT}", target_content)
+        action_block = action_block.replace("`{TARGET MESSAGE CONTENT GOES HERE}`", target_content)
     elif action_type == "@mention":
         user = target_user or "(unknown)"
-        action_block = _MENTION_BLOCK_TEMPLATE.replace("{TARGET_USER}", user)
-    else:
-        action_block = _MESSAGE_BLOCK  # fallback
+        action_block = action_block.replace("{TARGET_USER}", user)
 
-    # Format chat log
-    chat_log = _format_chat_log(messages)
-
-    # Build the final prompt (simplified assembly from the template structure)
-    prompt = f"""# Performer Prompt
-
-You are a 'Performer' in a social scientific experiment simulating a realistic online chatroom. A 'Director' has analysed the current state of the chatroom and determined what action should be taken next. Your role is to execute the Director's instructions by generating a single, realistic chatroom message.
-
-## Your Task
-
-The Director has provided you with:
-- An **Objective**: What your character wants to achieve
-- A **Motivation**: Why they want this — the situational context
-- An **Action**: The specific tactic and communicative approach to use
-
-Your job is to produce a message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add meta-commentary. Output only the message itself.
-
-## Director's Instructions
-
-{instruction_text}
-
----
-
-## Action Type Instructions
-
-{action_block}
-
----
-
-## Chat Log
-
-Here are the recent chatroom messages for context:
-
-{chat_log}
-
----
-
-## Output
-
-Produce only the message content. No preamble, no explanation, no quotation marks unless they are part of the message itself."""
+    # Assemble the full prompt from the base template
+    prompt = _BASE_TEMPLATE
+    prompt = prompt.replace("`{PERFORMER_INSTRUCTION GOES HERE}`", _format_instruction(instruction))
+    prompt = prompt.replace("{ACTION_BLOCK}", action_block)
+    prompt = prompt.replace("`{CHAT LOG GOES HERE}`", _format_chat_log(messages))
 
     return prompt

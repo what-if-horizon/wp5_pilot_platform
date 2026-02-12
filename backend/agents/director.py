@@ -22,9 +22,17 @@ def format_chat_log(messages: List[Message]) -> str:
 
     lines = []
     for m in messages:
-        line = f"[{m.message_id}] {m.sender}: {m.content}"
+        # Build metadata annotations
+        meta = []
         if m.reply_to:
-            line = f"[{m.message_id}] {m.sender} (replying to {m.reply_to}): {m.content}"
+            meta.append(f"replying to {m.reply_to}")
+        if m.mentions:
+            meta.append(f"@mentions {', '.join(m.mentions)}")
+        if m.liked_by:
+            meta.append(f"liked by {', '.join(sorted(m.liked_by))}")
+
+        meta_str = f" ({'; '.join(meta)})" if meta else ""
+        line = f"[{m.message_id}] {m.sender}{meta_str}: {m.content}"
         lines.append(line)
     return "\n".join(lines)
 

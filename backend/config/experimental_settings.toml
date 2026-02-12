@@ -29,8 +29,7 @@
 [groups.uncivil_support]
 scenario = "news_article"
 treatment = """
-OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly agree with the human's expressed view. 1 agent should disagree. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
-TONE: The participant should feel like they have walked into an unpleasant online argument. The discussion should feel hostile, bad-tempered, and draining — the kind of thread most people would regret reading. Agents should come across as people who are more interested in winning than understanding. Disagreement between agents should feel personal and antagonistic rather than substantive."""
+This chatroom is characterised by incivility — agents resort to ad hominem attacks, aspersions on others' character or motives, dismissive and contemptuous language, mockery, and name-calling. Arguments tend to be personal rather than substantive. The group broadly supports the position expressed by the human participant — most agents share or reinforce their stance, though not unanimously."""
 
 [groups.uncivil_support.seed]
 type = "news_article"
@@ -44,8 +43,7 @@ body = "A new UN report released today warns that global temperatures are on tra
 [groups.uncivil_oppose]
 scenario = "news_article"
 treatment = """
-OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly disagree with the human's expressed view. 1 agent should agree with the human. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
-TONE: The participant should feel like they have walked into an unpleasant online argument. The discussion should feel hostile, bad-tempered, and draining — the kind of thread most people would regret reading. Agents should come across as people who are more interested in winning than understanding. Disagreement between agents should feel personal and antagonistic rather than substantive."""
+This chatroom is characterised by incivility — agents resort to ad hominem attacks, aspersions on others' character or motives, dismissive and contemptuous language, mockery, and name-calling. Arguments tend to be personal rather than substantive. The group broadly opposes the position expressed by the human participant — most agents challenge or push back against their stance, though not unanimously."""
 
 [groups.uncivil_oppose.seed]
 type = "news_article"
@@ -59,8 +57,7 @@ body = "A new UN report released today warns that global temperatures are on tra
 [groups.civil_support]
 scenario = "news_article"
 treatment = """
-OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly agree with the human's expressed view. 1 agent should disagree. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
-TONE: The participant should feel like they are in a reasonable, good-natured discussion where people genuinely engage with each other's points. Even when agents disagree, it should feel substantive rather than personal. The overall atmosphere should be one where the participant feels comfortable contributing — the kind of thread that restores your faith in online conversation."""
+This chatroom is characterised by civil discourse — agents engage with the substance of others' arguments, acknowledge different perspectives, and express disagreement through reasoning rather than personal attacks. The group broadly supports the position expressed by the human participant — most agents share or reinforce their stance, though not unanimously."""
 
 [groups.civil_support.seed]
 type = "news_article"
@@ -74,8 +71,7 @@ body = "A new UN report released today warns that global temperatures are on tra
 [groups.civil_oppose]
 scenario = "news_article"
 treatment = """
-OPINION SPLIT: After the human participant posts, 3 of the 5 agents should adopt positions that broadly disagree with the human's expressed view. 1 agent should agree with the human. 1 agent should remain neutral or ambivalent, engaging with the topic without committing to a clear side.
-TONE: The participant should feel like they are in a reasonable, good-natured discussion where people genuinely engage with each other's points. Even when agents disagree, it should feel substantive rather than personal. The overall atmosphere should be one where the participant feels comfortable contributing — the kind of thread that restores your faith in online conversation."""
+This chatroom is characterised by civil discourse — agents engage with the substance of others' arguments, acknowledge different perspectives, and express disagreement through reasoning rather than personal attacks. The group broadly opposes the position expressed by the human participant — most agents challenge or push back against their stance, though not unanimously."""
 
 [groups.civil_oppose.seed]
 type = "news_article"

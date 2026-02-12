@@ -20,16 +20,18 @@ Weigh these three criteria equally when making your decisions:
 
 2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
 
-3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (e.g., pacing, turn distribution, tangents, short messages)? Consider whether the human participant (`{HUMAN_USER}`) feels included in the conversation — if they have been ignored or left out, prioritise actions that engage them.
+3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (turn distribution, action type distribution, short messsages, metadiscursive awareness)? Consider whether the human participant (`{HUMAN_USER}`) feels included in the conversation — if they have been ignored or left out, prioritise actions that engage them.
 
 ## Action Types
 
 You must select exactly one of the following:
 
-- `message`: A new message to the chatroom, not directed at anyone specific.
-- `reply`: A direct reply to a specific prior message (you must specify the msg_id).
-- `@mention`: A message that @mentions a specific user.
-- `like`: A non-verbal endorsement of a specific prior message.
+- `message`: A standalone message to the chatroom. This is used to respond to the general conversational flow or to introduce new points. 
+- `reply`: A direct reply that quotes a prior message (msg_id). This is for when the agent wants to address a specific message. 
+- `@mention`: A message that @mentions a specific user. This is for when the agent wants to draw someone into the conversation or address them directly.
+- `like`: A non-verbal endorsement of a prior message (msg_id). Agents should frequently like messages they find valuable, want to amplify, or ackowledge.
+
+**Usage guidance:** For ecological validity, aim for a mix roughly in the region of ~30% `message`, ~40% `like`, ~15% `reply`, ~15% `@mention`. 
 
 ## Output Format
 
@@ -55,7 +57,7 @@ Respond with a JSON object using exactly this structure:
 - `target_message_id`: Required for `reply` and `like`, null otherwise.
 - `performer_instruction`: Omit entirely if `action_type` is `like`.
 
-The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message.
+The `performer_instruction` object will be passed directly to the Performer. Ensure it is self-contained and provides sufficient context to generate a single, in-character message that satisfies the Director's intentions.
 
 ## Chat Log
 
