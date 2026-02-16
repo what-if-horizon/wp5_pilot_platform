@@ -34,7 +34,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and use a token from [participant_tokens.toml](./backend/config/participant_tokens.toml) to log in. Tokens are configured by the researcher and can only be used once.
+Open http://localhost:300x (see reported link when starting front end) and use a token from [participant_tokens.toml](./backend/config/participant_tokens.toml) to log in. Tokens are configured by the researcher and can only be used once. Delete used_tokens.jsonl to reset tokens.
 
 ## Project Structure
 

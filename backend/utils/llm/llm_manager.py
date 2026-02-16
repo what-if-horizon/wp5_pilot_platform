@@ -1,9 +1,9 @@
 import asyncio
 from typing import Optional
 
-from .llm_gemini import GeminiClient
-from .llm_huggingface import HuggingFaceClient
-from .llm_anthropic import AnthropicClient
+from .provider.llm_gemini import GeminiClient
+from .provider.llm_huggingface import HuggingFaceClient
+from .provider.llm_anthropic import AnthropicClient
 
 
 def _create_client(provider: str, model: str = None, temperature: float = None):
@@ -22,8 +22,12 @@ def _create_client(provider: str, model: str = None, temperature: float = None):
         return GeminiClient(**kwargs)
     elif provider == "anthropic":
         return AnthropicClient(**kwargs)
+    elif provider == "none":
+        # No cloud provider — load model locally via transformers
+        from .local.llm_salamandra import SalamandraClient
+        return SalamandraClient(**kwargs)
     else:
-        raise RuntimeError(f"Unknown llm_provider: '{provider}'. Supported: 'gemini', 'huggingface', 'anthropic'")
+        raise RuntimeError(f"Unknown llm_provider: '{provider}'. Supported: 'gemini', 'huggingface', 'anthropic', 'None' (local)")
 
 
 def _create_client_from_config(simulation_config: dict):

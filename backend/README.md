@@ -13,7 +13,7 @@ All session activity is logged for research purposes.
 
 | Component | Model | Role |
 |-----------|-------|------|
-| **Director** | general reasoning | Decides which agent acts, selects action type, and provides structured instructions |
+| **Director** | general, reasoning | Decides which agent acts, selects action type, and provides structured instructions |
 | **Performer** | (instruction) fine-tuned  | Generates the actual chatroom message from the Director's instructions |
 
 **Why two models?** Fine-tuning the Performer on social media data produces realistic online speech but degrades the general reasoning needed for goal-oriented multi-agent orchestration. By isolating content generation from strategic reasoning, each model can be optimised independently.
@@ -22,7 +22,7 @@ All session activity is logged for research purposes.
 
 The Director weighs three criteria when choosing the next action:
 
-1. **Internal validity** -- Is the simulation satisfying the experimental treatment requirements?
+1. **Internal validity** -- Is the simulation delivering the experimental treatment?
 2. **Motivational validity** -- Does the selected agent have a plausible reason to act now?
 3. **Ecological validity** -- Would the chatroom appear realistic to a human observer?
 

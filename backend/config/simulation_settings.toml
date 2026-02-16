@@ -3,23 +3,25 @@
 
 
 ### SESSION SETTINGS ###
+# Language for Director and Performer prompts: "EN" (English) or "ES" (Spanish / peninsular)
+language = "ES"
 # Reproducibility seed
-# Controls: simulation tick pass/fail gate (messages_per_minute). 
-random_seed = 42 
+# Controls: simulation tick pass/fail gate (messages_per_minute).
+random_seed = 42
 # - session_duration_minutes: max. duration of the simulation session in minutes
-session_duration_minutes = 1
+session_duration_minutes = 3
 
 ### AGENT SPACE ###
 # - num_agents: total agents in the session (int)
 num_agents = 5
 # - agent_names:list of agent names (list of strings, len = num_agents).
-agent_names = ["Alice", "Bob", "Charlie", "Lucy", "David"]
+agent_names = ["María", "Pablo", "Lucía", "Carlos", "Elena"]
 
 ### AGENT PACING ###
 # - messages_per_minute: background message rate (int)
-messages_per_minute = 50
+messages_per_minute = 20
 # - typing_delay_seconds: fixed delay before posting a message, simulates typing (float, 0 to disable)
-typing_delay_seconds = 1.0
+typing_delay_seconds = 0
 
 ### DIRECTOR LLM SETTINGS ###
 # The Director is a large reasoning model that decides which agent acts,
@@ -27,15 +29,16 @@ typing_delay_seconds = 1.0
 # current providers: "anthropic", "huggingface", "gemini"
 director_llm_provider = "anthropic"
 director_llm_model = "claude-sonnet-4-5"
-director_temperature = 1
+director_temperature = 0.2
 
 ### PERFORMER LLM SETTINGS ###
 # The Performer is a fine-tuned instruction model that generates the actual
 # chatroom message based on the Director's instructions.
-# current providers: "anthropic", "huggingface", "gemini"
-performer_llm_provider = "huggingface"
-performer_llm_model = "meta-llama/Llama-3.1-8B-Instruct"
-performer_temperature = 1
+# current providers: "anthropic", "huggingface", "gemini" or "None" if local model.
+# current local models: "BSC-LT/salamandra-7b-instruct", or "BSC-LT/salamandra-2b-instruct"
+performer_llm_provider = "None"
+performer_llm_model = "BSC-LT/salamandra-2b-instruct"
+performer_temperature = 0.2
 
 ### SHARED LLM SETTINGS ###
 # - context_window_size: how many recent messages to include in prompts (int)

@@ -6,9 +6,12 @@ from typing import List
 from models import Message, Agent
 
 
-# Load the Director prompt template once at import time
-_TEMPLATE_PATH = Path(__file__).parent / "prompts" / "director_prompt.md"
-_TEMPLATE = _TEMPLATE_PATH.read_text(encoding="utf-8")
+# Load Director prompt templates for each supported language at import time
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+_TEMPLATES = {
+    "EN": (_PROMPTS_DIR / "director_prompt.md").read_text(encoding="utf-8"),
+    "ES": (_PROMPTS_DIR / "director_prompt_es.md").read_text(encoding="utf-8"),
+}
 
 
 def format_chat_log(messages: List[Message]) -> str:
@@ -37,18 +40,19 @@ def format_chat_log(messages: List[Message]) -> str:
     return "\n".join(lines)
 
 
-def build_director_prompt(treatment: str, messages: List[Message], agents: List[Agent], human_user: str = "user") -> str:
+def build_director_prompt(treatment: str, messages: List[Message], agents: List[Agent], human_user: str = "user", language: str = "EN") -> str:
     """Build the full Director prompt by injecting treatment, chat log, and human user name."""
     chat_log = format_chat_log(messages)
     agent_names = ", ".join(a.name for a in agents)
 
-    prompt = _TEMPLATE
+    prompt = _TEMPLATES.get(language, _TEMPLATES["EN"])
     prompt = prompt.replace("{TREATMENT GOES HERE}", treatment)
     prompt = prompt.replace("{CHAT LOG GOES HERE}", chat_log)
     prompt = prompt.replace("{HUMAN_USER}", human_user)
 
     # Append the list of available agent names so the Director knows who it can select
-    prompt += f"\n\n## Available Agents\n\n{agent_names}\n"
+    heading = "Agentes Disponibles" if language == "ES" else "Available Agents"
+    prompt += f"\n\n## {heading}\n\n{agent_names}\n"
 
     return prompt
 

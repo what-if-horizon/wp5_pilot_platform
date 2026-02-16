@@ -5,9 +5,12 @@ from typing import List, Optional
 from models import Message
 
 
-# Load the Performer prompt template once at import time
-_TEMPLATE_PATH = Path(__file__).parent / "prompts" / "performer_prompt.md"
-_RAW_TEMPLATE = _TEMPLATE_PATH.read_text(encoding="utf-8")
+# Load Performer prompt templates for each supported language at import time
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+_RAW_TEMPLATES = {
+    "EN": (_PROMPTS_DIR / "performer_prompt.md").read_text(encoding="utf-8"),
+    "ES": (_PROMPTS_DIR / "performer_prompt_es.md").read_text(encoding="utf-8"),
+}
 
 
 def _parse_template(raw: str):
@@ -42,7 +45,10 @@ def _parse_template(raw: str):
     return base, blocks
 
 
-_BASE_TEMPLATE, _ACTION_BLOCKS = _parse_template(_RAW_TEMPLATE)
+# Parse each language template into base + action blocks
+_PARSED_TEMPLATES = {
+    lang: _parse_template(raw) for lang, raw in _RAW_TEMPLATES.items()
+}
 
 
 def _format_chat_log(messages: List[Message]) -> str:
@@ -77,14 +83,17 @@ def build_performer_prompt(
     messages: List[Message],
     target_message: Optional[Message] = None,
     target_user: Optional[str] = None,
+    language: str = "EN",
 ) -> str:
     """Build the full Performer prompt from the Director's output.
 
     Selects the appropriate action-type block from the parsed template,
     injects dynamic values, and fills the base template placeholders.
     """
+    base_template, action_blocks = _PARSED_TEMPLATES.get(language, _PARSED_TEMPLATES["EN"])
+
     # Select the action-type block (fall back to 'message' for unknown types)
-    action_block = _ACTION_BLOCKS.get(action_type, _ACTION_BLOCKS["message"])
+    action_block = action_blocks.get(action_type, action_blocks["message"])
 
     # Substitute dynamic values within the selected block
     if action_type == "reply":
@@ -97,7 +106,7 @@ def build_performer_prompt(
         action_block = action_block.replace("{TARGET_USER}", user)
 
     # Assemble the full prompt from the base template
-    prompt = _BASE_TEMPLATE
+    prompt = base_template
     prompt = prompt.replace("`{PERFORMER_INSTRUCTION GOES HERE}`", _format_instruction(instruction))
     prompt = prompt.replace("{ACTION_BLOCK}", action_block)
     prompt = prompt.replace("`{CHAT LOG GOES HERE}`", _format_chat_log(messages))

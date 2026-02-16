@@ -133,6 +133,12 @@ def validate_sim_config(path: str) -> dict:
             raise ValueError("'llm_concurrency_limit' must be a positive integer (>0)")
         cfg["llm_concurrency_limit"] = llc
 
+        # language: optional, defaults to "EN"; must be "EN" or "ES"
+        lang = cfg.get("language", "EN")
+        if not isinstance(lang, str) or lang.upper() not in ("EN", "ES"):
+            raise ValueError("'language' must be \"EN\" or \"ES\"")
+        cfg["language"] = lang.upper()
+
     except KeyError as e:
         raise ValueError(f"missing simulation config key: {e}")
     except (TypeError, ValueError) as e:

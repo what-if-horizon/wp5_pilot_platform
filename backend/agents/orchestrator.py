@@ -37,12 +37,14 @@ class Orchestrator:
         state,
         logger: Logger,
         context_window_size: int = 10,
+        language: str = "EN",
     ):
         self.director_llm = director_llm
         self.performer_llm = performer_llm
         self.state = state
         self.logger = logger
         self.context_window_size = context_window_size
+        self.language = language
 
     async def execute_turn(self, treatment: str) -> Optional[TurnResult]:
         """Run one full Director->Performer cycle.
@@ -54,7 +56,7 @@ class Orchestrator:
         agents = self.state.agents
 
         # 2. Build and send the Director prompt
-        director_prompt = build_director_prompt(treatment, recent, agents, human_user=self.state.user_name)
+        director_prompt = build_director_prompt(treatment, recent, agents, human_user=self.state.user_name, language=self.language)
         director_raw = None
         try:
             director_raw = await self.director_llm.generate_response(director_prompt, max_retries=1)
@@ -117,6 +119,7 @@ class Orchestrator:
             messages=recent,
             target_message=target_message,
             target_user=target_user,
+            language=self.language,
         )
 
         performer_raw = None

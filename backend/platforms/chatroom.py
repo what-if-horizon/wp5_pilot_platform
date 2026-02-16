@@ -76,6 +76,7 @@ class SimulationSession:
             state=self.state,
             logger=self.logger,
             context_window_size=int(self.simulation_config["context_window_size"]),
+            language=self.simulation_config.get("language", "EN"),
         )
 
         # Load the experiment scenario (defaults to BaseScenario / no-op)
