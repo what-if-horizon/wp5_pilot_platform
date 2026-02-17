@@ -29,19 +29,13 @@
 [groups.uncivil_support]
 scenario = "news_article"
 treatment = """
-Este chat se caracteriza por la falta de civismo: los agentes recurren a ataques ad hominem, 
-descalificaciones del carácter o las motivaciones de los demás, lenguaje despectivo y despreciativo, 
-burlas e insultos. Los argumentos tienden a ser personales más que de fondo. El grupo apoya en general 
-la posición expresada por el participante humano — la mayoría de los agentes comparten o refuerzan su postura, 
-aunque no de forma unánime."""
+Este chat se caracteriza por la falta de civismo: los agentes recurren a ataques ad hominem, descalificaciones del carácter o las motivaciones de los demás, lenguaje despectivo y despreciativo, burlas e insultos. Los argumentos tienden a ser personales más que de fondo. El grupo apoya en general la posición expresada por el participante humano — la mayoría de los agentes comparten o refuerzan su postura, aunque no de forma unánime."""
 
 [groups.uncivil_support.seed]
 type = "news_article"
 headline = "Un informe climático advierte de que se superarán los 2°C antes de 2030"
 source = "Reuters"
-body = "Un nuevo informe de la ONU publicado hoy advierte de que las temperaturas globales van camino de superar 
-el umbral crítico de calentamiento de 2°C antes de que termine la década, mucho antes de lo previsto anteriormente. 
-El informe exige reducciones inmediatas y drásticas de las emisiones de gases de efecto invernadero."
+body = "Un nuevo informe de la ONU publicado hoy advierte de que las temperaturas globales van camino de superar el umbral crítico de calentamiento de 2°C antes de que termine la década, mucho antes de lo previsto anteriormente. El informe exige reducciones inmediatas y drásticas de las emisiones de gases de efecto invernadero."
 
 
 # ── Treatment 2: uncivil + oppose position ─────────────────
@@ -49,11 +43,7 @@ El informe exige reducciones inmediatas y drásticas de las emisiones de gases d
 [groups.uncivil_oppose]
 scenario = "news_article"
 treatment = """
-Este chat se caracteriza por la falta de civismo: los agentes recurren a ataques ad hominem, 
-descalificaciones del carácter o las motivaciones de los demás, lenguaje despectivo y despreciativo, 
-burlas e insultos. Los argumentos tienden a ser personales más que de fondo. El grupo se opone en general 
-a la posición expresada por el participante humano — la mayoría de los agentes cuestionan o contradicen su postura,
-aunque no de forma unánime."""
+Este chat se caracteriza por la falta de civismo: los agentes recurren a ataques ad hominem, descalificaciones del carácter o las motivaciones de los demás, lenguaje despectivo y despreciativo, burlas e insultos. Los argumentos tienden a ser personales más que de fondo. El grupo se opone en general a la posición expresada por el participante humano — la mayoría de los agentes cuestionan o contradicen su postura, aunque no de forma unánime."""
 
 [groups.uncivil_oppose.seed]
 type = "news_article"
@@ -67,34 +57,24 @@ body = "Un nuevo informe de la ONU publicado hoy advierte de que las temperatura
 [groups.civil_support]
 scenario = "news_article"
 treatment = """
-Este chat se caracteriza por un discurso respetuoso: los agentes abordan el contenido de los argumentos ajenos, 
-reconocen diferentes perspectivas y expresan el desacuerdo mediante razonamientos en lugar de ataques personales. 
-El grupo apoya en general la posición expresada por el participante humano — la mayoría de los agentes comparten 
-o refuerzan su postura, aunque no de forma unánime."""
+Este chat se caracteriza por un discurso respetuoso: los agentes abordan el contenido de los argumentos ajenos, reconocen diferentes perspectivas y expresan el desacuerdo mediante razonamientos en lugar de ataques personales. El grupo apoya en general la posición expresada por el participante humano — la mayoría de los agentes comparten o refuerzan su postura, aunque no de forma unánime."""
 
 [groups.civil_support.seed]
 type = "news_article"
 headline = "Un informe climático advierte de que se superarán los 2°C antes de 2030"
 source = "Reuters"
-body = "Un nuevo informe de la ONU publicado hoy advierte de que las temperaturas globales van camino de superar
-el umbral crítico de calentamiento de 2°C antes de que termine la década, mucho antes de lo previsto anteriormente.
-El informe exige reducciones inmediatas y drásticas de las emisiones de gases de efecto invernadero."
+body = "Un nuevo informe de la ONU publicado hoy advierte de que las temperaturas globales van camino de superar el umbral crítico de calentamiento de 2°C antes de que termine la década, mucho antes de lo previsto anteriormente. El informe exige reducciones inmediatas y drásticas de las emisiones de gases de efecto invernadero."
 
 
-# ── Treatment 4: civil + oppose position ─────────────────
+# ── Tratamiento 4: Civil + Mayoría en contra ────────────────
 
 [groups.civil_oppose]
 scenario = "news_article"
 treatment = """
-Este chat se caracteriza por un discurso respetuoso: los agentes abordan el contenido de los argumentos ajenos, 
-reconocen diferentes perspectivas y expresan el desacuerdo mediante razonamientos en lugar de ataques personales. 
-El grupo se opone en general a la posición expresada por el participante humano — la mayoría de los agentes 
-cuestionan o contradicen su postura, aunque no de forma unánime."""
+Este chat se caracteriza por un discurso respetuoso: los agentes abordan el contenido de los argumentos ajenos, reconocen diferentes perspectivas y expresan el desacuerdo mediante razonamientos en lugar de ataques personales. El grupo se opone en general a la posición expresada por el participante humano — la mayoría de los agentes cuestionan o contradicen su postura, aunque no de forma unánime."""
 
 [groups.civil_oppose.seed]
 type = "news_article"
 headline = "Un informe climático advierte de que se superarán los 2°C antes de 2030"
 source = "Reuters"
-body = "Un nuevo informe de la ONU publicado hoy advierte de que las temperaturas globales van camino de superar
-el umbral crítico de calentamiento de 2°C antes de que termine la década, mucho antes de lo previsto anteriormente.
-El informe exige reducciones inmediatas y drásticas de las emisiones de gases de efecto invernadero."
+body = "Un nuevo informe de la ONU publicado hoy advierte de que las temperaturas globales van camino de superar el umbral crítico de calentamiento de 2°C antes de que termine la década, mucho antes de lo previsto anteriormente. El informe exige reducciones inmediatas y drásticas de las emisiones de gases de efecto invernadero."

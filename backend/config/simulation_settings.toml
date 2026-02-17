@@ -9,7 +9,7 @@ language = "ES"
 # Controls: simulation tick pass/fail gate (messages_per_minute).
 random_seed = 42
 # - session_duration_minutes: max. duration of the simulation session in minutes
-session_duration_minutes = 3
+session_duration_minutes = 1
 
 ### AGENT SPACE ###
 # - num_agents: total agents in the session (int)
@@ -19,7 +19,7 @@ agent_names = ["María", "Pablo", "Lucía", "Carlos", "Elena"]
 
 ### AGENT PACING ###
 # - messages_per_minute: background message rate (int)
-messages_per_minute = 20
+messages_per_minute = 60
 # - typing_delay_seconds: fixed delay before posting a message, simulates typing (float, 0 to disable)
 typing_delay_seconds = 0
 
