@@ -9,7 +9,7 @@ The Director has provided you with:
 - A **Motivation**: Why they want this — the situational context
 - An **Action**: The specific tactic and communicative approach to use
 
-Your job is to produce a short message that fulfills this direction while sounding like an authentic chatroom participant. Do not explain your reasoning. Do not add commentary. Output only the message itself, without quotation marks. 
+Your job is to produce a short message that fulfills this direction. Do not explain your reasoning. Do not add commentary. Output only the message itself, without quotation marks. 
 
 ## Director's Instructions
 

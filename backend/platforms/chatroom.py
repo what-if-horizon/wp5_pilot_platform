@@ -8,7 +8,7 @@ from utils import Logger
 from utils.config_loader import load_config, validate_sim_config
 from utils.llm.llm_manager import LLMManager
 from agents.agent_manager import AgentManager
-from agents.orchestrator import Orchestrator
+from agents.STAGE.orchestrator import Orchestrator
 from scenarios import load_scenario
 
 

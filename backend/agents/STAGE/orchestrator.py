@@ -3,8 +3,8 @@ from typing import Optional, List
 
 from models import Message, Agent
 from utils import Logger
-from agents.director import build_director_prompt, parse_director_response
-from agents.performer import build_performer_prompt
+from agents.STAGE.director import build_director_prompt, parse_director_response
+from agents.STAGE.performer import build_performer_prompt
 
 
 @dataclass

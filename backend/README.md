@@ -57,7 +57,7 @@ The Director selects one of four action types per turn:
 7. Loop repeats on next tick
 ```
 
-For full prompt specifications, see [director_prompt.md](agents/prompts/director_prompt.md) and [performer_prompt.md](agents/prompts/performer_prompt.md). For a standalone description of the framework, see [framework_overview.md](agents/framework_overview.md).
+For full prompt specifications, see [director_prompt.md](agents/STAGE/prompts/director_prompt.md) and [performer_prompt.md](agents/STAGE/prompts/performer_prompt.md).
 
 ## Simulation Loop
 
@@ -101,30 +101,39 @@ backend/
 ├── main.py                          # FastAPI app: REST + WebSocket entrypoint
 ├── pyproject.toml                   # Dependencies and project metadata
 ├── agents/
-│   ├── agent_manager.py             # Bridges simulation loop to orchestrator
-│   ├── orchestrator.py              # Director->Performer pipeline
-│   ├── director.py                  # Director prompt builder and response parser
-│   ├── performer.py                 # Performer prompt builder
-│   ├── framework_overview.md        # STAGE framework description
-│   └── prompts/
-│       ├── director_prompt.md       # Director prompt template
-│       └── performer_prompt.md      # Performer prompt template
+│   ├── agent_manager.py             # Bridges simulation loop to STAGE orchestrator
+│   └── STAGE/                       # STAGE framework (Director-Performer pipeline)
+│       ├── orchestrator.py          # Director->Performer pipeline coordination
+│       ├── director.py              # Director prompt builder and response parser
+│       ├── performer.py             # Performer prompt builder
+│       └── prompts/
+│           ├── director_prompt.md   # Director prompt template (EN)
+│           ├── director_prompt_es.md # Director prompt template (ES)
+│           ├── performer_prompt.md  # Performer prompt template (EN)
+│           └── performer_prompt_es.md # Performer prompt template (ES)
 ├── platforms/
 │   └── chatroom.py                  # Simulation session: tick loop, lifecycle, WebSocket wiring
 ├── models/
 │   ├── agent.py                     # Agent dataclass (name)
 │   ├── message.py                   # Message dataclass (content, likes, replies, reports)
 │   └── session.py                   # SessionState (agents, messages, clock, blocking)
+├── scenarios/
+│   ├── base.py                      # Base scenario (no-op default)
+│   └── news_article.py              # News article scenario
 ├── utils/
 │   ├── config_loader.py             # TOML config loading and validation
 │   ├── logger.py                    # Session logging (messages, events, LLM calls)
+│   ├── log_viewer.py                # Log viewing utilities
 │   ├── session_manager.py           # Concurrent session management
 │   ├── token_manager.py             # Participant token auth and assignment
 │   └── llm/
-│       ├── llm_manager.py           # LLM client factory 
-│       ├── llm_anthropic.py         # Anthropic API client 
-│       ├── llm_huggingface.py       # HuggingFace IP client 
-│       └── llm_gemini.py            # Gemini API client 
+│       ├── llm_manager.py           # LLM client factory
+│       ├── provider/                # Cloud LLM API clients
+│       │   ├── llm_anthropic.py     # Anthropic API client
+│       │   ├── llm_gemini.py        # Gemini API client
+│       │   └── llm_huggingface.py   # HuggingFace Inference API client
+│       └── local/                   # Local/self-hosted LLM clients
+│           └── llm_salamandra.py    # Salamandra model client
 ├── config/
 │   ├── simulation_settings.toml     # Simulation parameters
 │   ├── experimental_settings.toml   # Treatment group definitions

@@ -36,8 +36,8 @@ director_temperature = 0.2
 # chatroom message based on the Director's instructions.
 # current providers: "anthropic", "huggingface", "gemini" or "None" if local model.
 # current local models: "BSC-LT/salamandra-7b-instruct", or "BSC-LT/salamandra-2b-instruct"
-performer_llm_provider = "None"
-performer_llm_model = "BSC-LT/salamandra-2b-instruct"
+performer_llm_provider = "anthropic"
+performer_llm_model = "claude-sonnet-4-5"
 performer_temperature = 0.2
 
 ### SHARED LLM SETTINGS ###

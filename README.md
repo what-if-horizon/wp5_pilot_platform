@@ -6,12 +6,12 @@ Platform for integrating AI agents into simulated social media environments to s
 
 ## STAGE Framework
 
-The platform is powered by **STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments), a multi-agent coordination framework that separates agent coordination from message generation duties:
+The platform is powered by **STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments), a multi-agent framework that separates agent coordination from message generation duties:
 
 - A **Director** (general reasoning model) analyses the chatroom state and decides which agent should act, what action to take, and provides structured instructions.
 - A **Performer** (instruction fine-tuned model) generates the actual chatroom message from the Director's instructions
 
-This separation allows the Performer to be fine-tuned for realistic online speech without compromising the Director's capacity for managing experimental conditions and multi-agent coordination. See the [backend documentation](./backend/README.md) for full details.
+This separation allows the Performer to be (instruction) fine-tuned for realistic online speech without compromising the Director's capacity for managing experimental conditions and multi-agent coordination. See the [backend documentation](./backend/README.md) for full details.
 
 ## Quick Start
 
@@ -25,7 +25,7 @@ echo 'HF_API_KEY=your_key_here' >> .env
 echo 'GEMINI_API_KEY=your_key_here' >> .env
 python main.py
 ```
-Which keys you need depends on the providers configured in [simulation_settings.toml](./backend/config/simulation_settings.toml). The defaults use Anthropic (Director) and HuggingFace (Performer). Gemini is available as an alternative provider.
+Which keys you need depends on the providers configured in [simulation_settings.toml](./backend/config/simulation_settings.toml). Currently there are Anthropic, HuggingFace (provider API) and Gemini /providers. It is also possible to specify a /local decoder model.
 
 ### Frontend
 ```bash
@@ -40,9 +40,8 @@ Open http://localhost:300x (see reported link when starting front end) and use a
 
 ```
 wp5_pilot_platform/
-├── backend/          # FastAPI server, STAGE framework, simulation logic
+├── backend/          # FastAPI server
 ├── frontend/         # Next.js chat UI
-├── logs/             # Session logs (generated at runtime)
 └── README.md
 ```
 

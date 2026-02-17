@@ -18,7 +18,7 @@ Weigh these three criteria equally when making your decisions:
 
 1. **Internal validity**: Is the simulation satisfying the experimental requirements? These are: `{TREATMENT GOES HERE}`
 
-2. **Motivational validity**: Does this agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
+2. **Motivational validity**: Does the agent have sufficient reason to act now? Consider: recent activity levels, whether they have been @mentioned or quote-replied, and whether their views have been supported or challenged.
 
 3. **Ecological validity**: Would the chatroom appear realistic and immersive to a human observer? Is the conversation flowing naturally, with dynamics typical of an online chatroom (turn distribution, action type distribution, short messsages, metadiscursive awareness)? Consider whether the human participant (`{HUMAN_USER}`) feels included in the conversation — if they have been ignored or left out, prioritise actions that engage them.
 
