@@ -45,8 +45,8 @@ performer_top_p = 0.8
 # stripping any commentary, formatting, or extraneous text.
 # A fast, cheap model is ideal since the task is simple extraction.
 moderator_llm_provider = "anthropic"
-moderator_llm_model = "claude-haiku-4-5-20251001"
-moderator_temperature = 0.0
+moderator_llm_model = "claude-haiku-4-5"
+moderator_temperature = 0.2
 moderator_top_p = 1.0
 
 ### SHARED LLM SETTINGS ###

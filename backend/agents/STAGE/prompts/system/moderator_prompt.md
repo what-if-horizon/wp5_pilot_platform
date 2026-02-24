@@ -25,7 +25,7 @@ Your job is to strip away ALL of this extra content and return ONLY the actual c
 2. Do NOT add any commentary, explanation, or formatting of your own.
 3. Do NOT wrap the message in quotation marks.
 4. Do NOT add a character name prefix.
-5. Preserve the original language of the message (do not translate).
+5. Preserve the original language of the message exactly (do not translate).
 6. If the performer output contains NO identifiable chatroom message content at all, output exactly: NO_CONTENT
 
 ## Important
