@@ -13,7 +13,7 @@ BASE_URL = "https://whatif.inf.uni-konstanz.de/v1"
 class KonstanzClient:
     """Client for the University of Konstanz vLLM endpoint (OpenAI-compatible)."""
 
-    def __init__(self, model_name: str = "BSC-LT/ALIA-40b", temperature: float = None):
+    def __init__(self, model_name: str = "BSC-LT/ALIA-40b-instruct-2601", temperature: float = None):
         self.model_name = model_name
         self.temperature = temperature
         api_key = os.getenv("KONSTANZ_API_KEY", "")

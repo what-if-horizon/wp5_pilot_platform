@@ -36,7 +36,7 @@ director_top_p = 0.8
 # current providers: "anthropic", "huggingface", "gemini", "mistral", "konstanz" or "None" if local model.
 # current local models: "BSC-LT/salamandra-7b-instruct", or "BSC-LT/salamandra-2b-instruct"
 performer_llm_provider = "konstanz"
-performer_llm_model = "BSC-LT/ALIA-40b"
+performer_llm_model = "BSC-LT/ALIA-40b-instruct-2601"
 performer_temperature = 0.8
 performer_top_p = 0.8
 

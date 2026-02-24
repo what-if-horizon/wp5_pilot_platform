@@ -34,6 +34,10 @@ Then install the package(s) for the LLM provider(s) you want to use:
 
 Configure your chosen providers in [simulation_settings.toml](./backend/config/simulation_settings.toml), then copy [.env.example](./backend/.env.example) to `backend/.env` and fill in the API keys for the providers you are using.
 
+Setup your experimental conditions in [experimental_settings.toml](./backend/config/experimental_settings.toml). See the file for detailed comments on each setting. Configure participant tokens (linked to treatment groups) in [participant_tokens.toml](./backend/config/participant_tokens.toml).
+
+Setup the simulation settings in [simulation_settings.toml](./backend/config/simulation_settings.toml). See the file for detailed comments on each setting.
+
 ```bash
 cp .env.example .env   # then edit .env with your keys
 python main.py

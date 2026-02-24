@@ -77,6 +77,10 @@ You are posting a message that @mentions another user: **@{TARGET_USER}**, becau
 
 `{END_ACTION_TYPE_BLOCKS}`
 
+## Output Instructions
+
+Your entire response must be the chatroom message and nothing else (no commentary, no formatting). If your output contains anything beyond the chatroom message itself, you have failed the task.
+
 ## Chat Log
 
 Here are the recent chatroom messages for context:

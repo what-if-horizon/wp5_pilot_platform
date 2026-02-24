@@ -13,7 +13,7 @@ Below, the Director has provided you with:
 - A **Motivation**: Why your character wants to achieve this
 - A **Directive**: What your character should do to achieve this objective.
 
-Your job is to produce a short message that fulfills this direction, whilst also satisfying the 'style' requirements below. Do not explain your reasoning. Do not add commentary. Output only the message itself, without quotation marks.
+Your job is to produce a short message that fulfills this direction, whilst also satisfying the 'style' requirements below. **Output ONLY the message itself.** Nothing else — no reasoning, no commentary, no analysis, no explanation of what you did or why.
 
 ## Style
 
@@ -76,6 +76,10 @@ You are posting a message that @mentions another user: **@{TARGET_USER}**, becau
 ```
 
 `{END_ACTION_TYPE_BLOCKS}`
+
+## Output Instructions
+
+Your entire response must be the chatroom message and nothing else (no commentary, no formatting). If your output contains anything beyond the chatroom message itself, you have failed the task.
 
 ## Chat Log
 
