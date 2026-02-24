@@ -559,7 +559,7 @@ def _render_director_parsed(parsed: dict) -> str:
     # Performer instruction
     pi = parsed.get("performer_instruction")
     if pi:
-        for field in ("objective", "motivation", "action"):
+        for field in ("objective", "motivation", "strategy"):
             if field in pi:
                 parts.append(
                     f'<div class="director-field">'

@@ -6,12 +6,10 @@ from typing import List
 from models import Message, Agent
 
 
-# Load Director prompt templates for each supported language at import time
+# Load Director prompt templates at import time
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
-_TEMPLATES = {
-    "EN": (_PROMPTS_DIR / "director_prompt.md").read_text(encoding="utf-8"),
-    "ES": (_PROMPTS_DIR / "director_prompt_es.md").read_text(encoding="utf-8"),
-}
+_SYSTEM_TEMPLATE = (_PROMPTS_DIR / "system" / "director_prompt.md").read_text(encoding="utf-8")
+_USER_TEMPLATE = (_PROMPTS_DIR / "user" / "director_prompt.md").read_text(encoding="utf-8")
 
 
 def format_chat_log(messages: List[Message]) -> str:
@@ -40,21 +38,38 @@ def format_chat_log(messages: List[Message]) -> str:
     return "\n".join(lines)
 
 
-def build_director_prompt(treatment: str, messages: List[Message], agents: List[Agent], human_user: str = "user", language: str = "EN") -> str:
-    """Build the full Director prompt by injecting treatment, chat log, and human user name."""
+def build_director_system_prompt(treatment: str, human_user: str = "user", chatroom_context: str = "") -> str:
+    """Build the Director system prompt with session-static data only.
+
+    Per-turn dynamic data (chat log, available agents) is left as
+    placeholder notes — those sections will be filled in the user prompt.
+    """
+    prompt = _SYSTEM_TEMPLATE
+    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
+    prompt = prompt.replace("{TREATMENT GOES HERE}", treatment)
+    prompt = prompt.replace("{HUMAN_USER}", human_user)
+    return prompt
+
+
+def build_director_user_prompt(treatment: str, messages: List[Message], agents: List[Agent], human_user: str = "user", chatroom_context: str = "") -> str:
+    """Build the full Director user prompt by injecting context, treatment, chat log, and human user name."""
     chat_log = format_chat_log(messages)
     agent_names = ", ".join(a.name for a in agents)
 
-    prompt = _TEMPLATES.get(language, _TEMPLATES["EN"])
+    prompt = _USER_TEMPLATE
+    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
     prompt = prompt.replace("{TREATMENT GOES HERE}", treatment)
     prompt = prompt.replace("{CHAT LOG GOES HERE}", chat_log)
     prompt = prompt.replace("{HUMAN_USER}", human_user)
 
     # Append the list of available agent names so the Director knows who it can select
-    heading = "Agentes Disponibles" if language == "ES" else "Available Agents"
-    prompt += f"\n\n## {heading}\n\n{agent_names}\n"
+    prompt += f"\n\n## Available Agents\n\n{agent_names}\n"
 
     return prompt
+
+
+# Backwards compatibility alias
+build_director_prompt = build_director_user_prompt
 
 
 def parse_director_response(raw: str) -> dict:

@@ -45,6 +45,9 @@ class SimulationSession:
         if not self.treatment:
             raise RuntimeError(f"treatment_group '{treatment_group}' has no 'treatment' description")
 
+        # Extract shared chatroom context (platform, locale, language, etc.)
+        self.chatroom_context = self.experimental_settings_full.get("chatroom_context", "")
+
         # Load and validate simulation config
         self.simulation_config = validate_sim_config("config/simulation_settings.toml")
 
@@ -76,7 +79,7 @@ class SimulationSession:
             state=self.state,
             logger=self.logger,
             context_window_size=int(self.simulation_config["context_window_size"]),
-            language=self.simulation_config.get("language", "EN"),
+            chatroom_context=self.chatroom_context,
         )
 
         # Load the experiment scenario (defaults to BaseScenario / no-op)

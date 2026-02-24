@@ -1,13 +1,12 @@
 import asyncio
 from typing import Optional
 
-from .provider.llm_gemini import GeminiClient
-from .provider.llm_huggingface import HuggingFaceClient
-from .provider.llm_anthropic import AnthropicClient
 
+def _create_client(provider: str, model: str = None, temperature: float = None, top_p: float = None):
+    """Create an LLM client for the given provider and optional model name.
 
-def _create_client(provider: str, model: str = None, temperature: float = None):
-    """Create an LLM client for the given provider and optional model name."""
+    Imports are done lazily so only the selected provider's package needs to be installed.
+    """
     provider = (provider or "gemini").lower()
 
     kwargs = {}
@@ -17,17 +16,27 @@ def _create_client(provider: str, model: str = None, temperature: float = None):
         kwargs["temperature"] = temperature
 
     if provider == "huggingface":
+        from .provider.llm_huggingface import HuggingFaceClient
         return HuggingFaceClient(**kwargs)
     elif provider == "gemini":
+        from .provider.llm_gemini import GeminiClient
         return GeminiClient(**kwargs)
     elif provider == "anthropic":
+        from .provider.llm_anthropic import AnthropicClient
         return AnthropicClient(**kwargs)
+    elif provider == "mistral":
+        from .provider.llm_mistral import MistralClient
+        if top_p is not None:
+            kwargs["top_p"] = top_p
+        return MistralClient(**kwargs)
+    elif provider == "konstanz":
+        from .provider.llm_konstanz import KonstanzClient
+        return KonstanzClient(**kwargs)
     elif provider == "none":
-        # No cloud provider — load model locally via transformers
         from .local.llm_salamandra import SalamandraClient
         return SalamandraClient(**kwargs)
     else:
-        raise RuntimeError(f"Unknown llm_provider: '{provider}'. Supported: 'gemini', 'huggingface', 'anthropic', 'None' (local)")
+        raise RuntimeError(f"Unknown llm_provider: '{provider}'. Supported: 'gemini', 'huggingface', 'anthropic', 'mistral', 'konstanz', 'None' (local)")
 
 
 def _create_client_from_config(simulation_config: dict):
@@ -77,30 +86,31 @@ class LLMManager:
                 provider = simulation_config.get(f"{role}_llm_provider")
                 model = simulation_config.get(f"{role}_llm_model")
                 temperature = simulation_config.get(f"{role}_temperature")
+                top_p = simulation_config.get(f"{role}_top_p")
                 if provider:
-                    client = _create_client(provider, model, temperature=temperature)
+                    client = _create_client(provider, model, temperature=temperature, top_p=top_p)
             if client is None:
                 client = _create_client_from_config(simulation_config)
         return cls(simulation_config["llm_concurrency_limit"], client=client)
 
-    async def generate_response(self, prompt: str, max_retries: int = 1) -> Optional[str]:
+    async def generate_response(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
         """Acquire concurrency slot and delegate to the LLM client's async generator.
 
         Returns the response text or None on failure.
         """
         async with self._semaphore:
             # The underlying client is expected to implement async method
-            # `generate_response_async(prompt, max_retries)` returning Optional[str].
+            # `generate_response_async(prompt, max_retries, system_prompt)` returning Optional[str].
             try:
                 # type: ignore[attr-defined]
-                return await self.client.generate_response_async(prompt, max_retries=max_retries)
+                return await self.client.generate_response_async(prompt, max_retries=max_retries, system_prompt=system_prompt)
             except AttributeError:
                 # Fallback: maybe client only exposes sync API
                 # run the sync call in a threadpool
                 import asyncio as _asyncio
 
                 loop = _asyncio.get_running_loop()
-                return await loop.run_in_executor(None, lambda: self.client.generate_response(prompt, max_retries=max_retries))
+                return await loop.run_in_executor(None, lambda: self.client.generate_response(prompt, max_retries=max_retries, system_prompt=system_prompt))
             except Exception:
                 return None
 

@@ -1,5 +1,2 @@
-from .llm_gemini import gemini_client, GeminiClient
-from .llm_huggingface import huggingface_client, HuggingFaceClient
-from .llm_anthropic import AnthropicClient
-
-__all__ = ["gemini_client", "GeminiClient", "huggingface_client", "HuggingFaceClient", "AnthropicClient"]
+# Provider clients are imported lazily by llm_manager._create_client()
+# to avoid requiring all provider packages to be installed.

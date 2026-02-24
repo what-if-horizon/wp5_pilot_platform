@@ -22,19 +22,19 @@ Weigh these two criteria equally when making your decisions:
 
 1. **Internal validity**: Is the simulation satisfying the experimental treatment requirements? These are: `{TREATMENT GOES HERE}`
 
-2. **Ecological validity**: Would the chatroom appear realistic to a human observer? You should ensure that: 
+2. **Ecological validity**: Would the chatroom appear realistic to a human observer? You should ensure that:
 - the conversation should be dialogic: agents should react to the state of the conversation, rather than talking past each other.
 - there should be a mix of action types: approx. 30% message, 30% likes, 20% replies, 20% @mentions.
 - messages should be short and vary in tone, style, with some containing emojis or punctuation.
-- messages should be 'reddit-like': informal, self-aware, and sometimes include internet humour, slang, and abbreviations. 
+- messages should be 'reddit-like': informal, self-aware, and sometimes include internet humour, slang, and abbreviations.
 
 
 ## Action Types
 
 You must select exactly one of the following:
 
-- `message`: A standalone message to the chatroom. This is used to contribute to the general conversational flow (if targeting the room) OR to respond to the most recent message (if targeting a specific agent). 
-- `reply`: A direct reply that quotes a prior message (msg_id). This is only for when the agent wants to address a specific message that was not the most recent one in the chatlog. 
+- `message`: A standalone message to the chatroom. This is used to contribute to the general conversational flow (if targeting the room) OR to respond to the most recent message (if targeting a specific agent).
+- `reply`: A direct reply that quotes a prior message (msg_id). This is only for when the agent wants to address a specific message that was not the most recent one in the chatlog.
 - `@mention`: A message that @mentions a specific user. This is only for when the agent wants to address someone explicitly when that target did not send the last message in the chatlog.
 - `like`: A non-verbal endorsement of a prior message (msg_id). Agents should frequently like messages they find valuable, want to amplify, or ackowledge.
 

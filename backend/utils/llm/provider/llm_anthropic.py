@@ -25,7 +25,7 @@ class AnthropicClient:
         except Exception:
             self.aclient = None
 
-    def generate_response(self, prompt: str, max_retries: int = 1) -> Optional[str]:
+    def generate_response(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
         """Synchronous response generation."""
         attempts = 0
         last_error = None
@@ -39,6 +39,8 @@ class AnthropicClient:
                         {"role": "user", "content": prompt}
                     ],
                 )
+                if system_prompt is not None:
+                    kwargs["system"] = system_prompt
                 if self.temperature is not None:
                     kwargs["temperature"] = self.temperature
                 message = self.client.messages.create(**kwargs)
@@ -54,7 +56,7 @@ class AnthropicClient:
 
         return None
 
-    async def generate_response_async(self, prompt: str, max_retries: int = 1) -> Optional[str]:
+    async def generate_response_async(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
         """Async response generation using the async Anthropic client when available."""
         attempts = 0
         last_error = None
@@ -69,6 +71,8 @@ class AnthropicClient:
                             {"role": "user", "content": prompt}
                         ],
                     )
+                    if system_prompt is not None:
+                        kwargs["system"] = system_prompt
                     if self.temperature is not None:
                         kwargs["temperature"] = self.temperature
                     message = await self.aclient.messages.create(**kwargs)
@@ -77,7 +81,7 @@ class AnthropicClient:
                     # Fallback: run sync client in executor
                     loop = asyncio.get_running_loop()
                     resp = await loop.run_in_executor(
-                        None, lambda: self.generate_response(prompt, max_retries=0)
+                        None, lambda: self.generate_response(prompt, max_retries=0, system_prompt=system_prompt)
                     )
                     return resp
 

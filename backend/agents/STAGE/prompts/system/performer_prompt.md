@@ -25,7 +25,7 @@ Underneath the Director's Instructions, you will find specific instructions for 
 
 ## Director's Instructions
 
-`{PERFORMER_INSTRUCTION GOES HERE}`
+The Director's instructions (Objective, Motivation, Directive) will be provided in the user message below.
 
 ---
 
@@ -79,9 +79,7 @@ You are posting a message that @mentions another user: **@{TARGET_USER}**, becau
 
 ## Chat Log
 
-Here are the recent chatroom messages for context:
-
-`{CHAT LOG GOES HERE}`
+The recent chatroom messages will be provided in the user message below.
 
 ---
 

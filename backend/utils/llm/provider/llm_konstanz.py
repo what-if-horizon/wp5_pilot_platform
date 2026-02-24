@@ -1,38 +1,32 @@
 import os
 import asyncio
-from huggingface_hub import InferenceClient, AsyncInferenceClient
+from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 from typing import Optional
 
 # Load environment variables
 load_dotenv()
 
+BASE_URL = "https://whatif.inf.uni-konstanz.de/v1"
 
-class HuggingFaceClient:
-    """Client for interacting with HuggingFace Inference API (sync + async)."""
 
-    def __init__(self, model_name: str = "meta-llama/Llama-3.1-8B-Instruct:novita", temperature: float = None):
-        """
-        Initialize HuggingFace client. Creates both a sync client and an async client.
-        """
+class KonstanzClient:
+    """Client for the University of Konstanz vLLM endpoint (OpenAI-compatible)."""
+
+    def __init__(self, model_name: str = "BSC-LT/ALIA-40b", temperature: float = None):
         self.model_name = model_name
         self.temperature = temperature
-        api_key = os.getenv("HF_API_KEY")
+        api_key = os.getenv("KONSTANZ_API_KEY", "")
 
-        # Create sync client
-        self.client = InferenceClient(api_key=api_key)
+        self.client = OpenAI(base_url=BASE_URL, api_key=api_key)
 
-        # Create async client
         try:
-            self.aclient = AsyncInferenceClient(api_key=api_key)
+            self.aclient = AsyncOpenAI(base_url=BASE_URL, api_key=api_key)
         except Exception:
             self.aclient = None
 
     def generate_response(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
-        """Synchronous response generation.
-
-        This method is kept for backward compatibility.
-        """
+        """Synchronous response generation."""
         attempts = 0
         last_error = None
 
@@ -62,11 +56,7 @@ class HuggingFaceClient:
         return None
 
     async def generate_response_async(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
-        """Async response generation using the async HuggingFace client when available.
-
-        Falls back to running the sync client in a threadpool if the async client is
-        not available.
-        """
+        """Async response generation using the async OpenAI client when available."""
         attempts = 0
         last_error = None
 
@@ -86,7 +76,6 @@ class HuggingFaceClient:
                     completion = await self.aclient.chat.completions.create(**kwargs)
                     return completion.choices[0].message.content
                 else:
-                    # Fallback: run sync client in executor
                     loop = asyncio.get_running_loop()
                     resp = await loop.run_in_executor(
                         None, lambda: self.generate_response(prompt, max_retries=0, system_prompt=system_prompt)
@@ -117,7 +106,3 @@ class HuggingFaceClient:
             self.client.close()
         except Exception:
             pass
-
-
-# Global instance for easy import
-huggingface_client = HuggingFaceClient()

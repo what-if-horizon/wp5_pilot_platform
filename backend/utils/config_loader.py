@@ -121,6 +121,13 @@ def validate_sim_config(path: str) -> dict:
                 raise ValueError(f"'{tkey}' must be between 0.0 and 2.0")
             cfg[tkey] = tv
 
+        # director_top_p / performer_top_p: float in [0, 1] (optional, default 1.0)
+        for pkey in ["director_top_p", "performer_top_p"]:
+            pv = float(cfg.get(pkey, 1.0))
+            if not (0.0 <= pv <= 1.0):
+                raise ValueError(f"'{pkey}' must be between 0.0 and 1.0")
+            cfg[pkey] = pv
+
         # context_window_size: positive int
         cws = int(cfg["context_window_size"])
         if cws <= 0:
@@ -132,12 +139,6 @@ def validate_sim_config(path: str) -> dict:
         if llc <= 0:
             raise ValueError("'llm_concurrency_limit' must be a positive integer (>0)")
         cfg["llm_concurrency_limit"] = llc
-
-        # language: optional, defaults to "EN"; must be "EN" or "ES"
-        lang = cfg.get("language", "EN")
-        if not isinstance(lang, str) or lang.upper() not in ("EN", "ES"):
-            raise ValueError("'language' must be \"EN\" or \"ES\"")
-        cfg["language"] = lang.upper()
 
     except KeyError as e:
         raise ValueError(f"missing simulation config key: {e}")

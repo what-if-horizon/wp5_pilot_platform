@@ -5,12 +5,10 @@ from typing import List, Optional
 from models import Message
 
 
-# Load Performer prompt templates for each supported language at import time
+# Load Performer prompt templates at import time
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
-_RAW_TEMPLATES = {
-    "EN": (_PROMPTS_DIR / "performer_prompt.md").read_text(encoding="utf-8"),
-    "ES": (_PROMPTS_DIR / "performer_prompt_es.md").read_text(encoding="utf-8"),
-}
+_RAW_SYSTEM_TEMPLATE = (_PROMPTS_DIR / "system" / "performer_prompt.md").read_text(encoding="utf-8")
+_RAW_USER_TEMPLATE = (_PROMPTS_DIR / "user" / "performer_prompt.md").read_text(encoding="utf-8")
 
 
 def _parse_template(raw: str):
@@ -45,10 +43,9 @@ def _parse_template(raw: str):
     return base, blocks
 
 
-# Parse each language template into base + action blocks
-_PARSED_TEMPLATES = {
-    lang: _parse_template(raw) for lang, raw in _RAW_TEMPLATES.items()
-}
+# Only the user template needs parsing (action-block selection happens per turn).
+# The system template retains all action blocks as-is for reference.
+_PARSED_USER_TEMPLATE = _parse_template(_RAW_USER_TEMPLATE)
 
 
 def _format_chat_log(messages: List[Message]) -> str:
@@ -72,31 +69,57 @@ def _format_instruction(instruction: dict) -> str:
         parts.append(f"**Objective**: {instruction['objective']}")
     if "motivation" in instruction:
         parts.append(f"**Motivation**: {instruction['motivation']}")
-    if "action" in instruction:
-        parts.append(f"**Action**: {instruction['action']}")
+    if "strategy" in instruction:
+        parts.append(f"**Strategy**: {instruction['strategy']}")
     return "\n".join(parts)
 
 
-def build_performer_prompt(
+def build_performer_system_prompt(chatroom_context: str = "") -> str:
+    """Build the Performer system prompt with session-static data only.
+
+    The system prompt retains all action-type blocks so the LLM sees
+    the full instruction set. Dynamic placeholders (Director's instructions,
+    chat log) are left as descriptive notes already in the template.
+    """
+    prompt = _RAW_SYSTEM_TEMPLATE
+    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
+    return prompt
+
+
+def build_performer_user_prompt(
     instruction: dict,
     action_type: str,
     messages: List[Message],
     target_message: Optional[Message] = None,
     target_user: Optional[str] = None,
-    language: str = "EN",
+    chatroom_context: str = "",
 ) -> str:
-    """Build the full Performer prompt from the Director's output.
+    """Build the full Performer user prompt from the Director's output.
 
     Selects the appropriate action-type block from the parsed template,
     injects dynamic values, and fills the base template placeholders.
     """
-    base_template, action_blocks = _PARSED_TEMPLATES.get(language, _PARSED_TEMPLATES["EN"])
+    base_template, action_blocks = _PARSED_USER_TEMPLATE
 
     # Select the action-type block (fall back to 'message' for unknown types)
-    action_block = action_blocks.get(action_type, action_blocks["message"])
+    # For 'message' with a target_user, use the 'message_targeted' variant
+    if action_type == "message" and target_user:
+        block_key = "message_targeted"
+    else:
+        block_key = action_type
+    action_block = action_blocks.get(block_key, action_blocks["message"])
 
     # Substitute dynamic values within the selected block
-    if action_type == "reply":
+    if block_key == "message_targeted":
+        user = target_user or "(unknown)"
+        action_block = action_block.replace("{TARGET_USER}", user)
+        # Use the last message in the chat log as the target content
+        target_content = "(message not found)"
+        if messages:
+            last = messages[-1]
+            target_content = f"{last.sender}: {last.content}"
+        action_block = action_block.replace("`{TARGET MESSAGE CONTENT GOES HERE}`", target_content)
+    elif action_type == "reply":
         target_content = "(message not found)"
         if target_message:
             target_content = f"{target_message.sender}: {target_message.content}"
@@ -107,8 +130,13 @@ def build_performer_prompt(
 
     # Assemble the full prompt from the base template
     prompt = base_template
+    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
     prompt = prompt.replace("`{PERFORMER_INSTRUCTION GOES HERE}`", _format_instruction(instruction))
     prompt = prompt.replace("{ACTION_BLOCK}", action_block)
     prompt = prompt.replace("`{CHAT LOG GOES HERE}`", _format_chat_log(messages))
 
     return prompt
+
+
+# Backwards compatibility alias
+build_performer_prompt = build_performer_user_prompt

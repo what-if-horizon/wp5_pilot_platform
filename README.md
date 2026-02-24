@@ -19,13 +19,25 @@ This separation allows the Performer to be (instruction) fine-tuned for realisti
 ```bash
 cd backend
 pip install -e .
-# Create backend/.env with API keys (see .env.example):
-echo 'ANTHROPIC_API_KEY=your_key_here' > .env
-echo 'HF_API_KEY=your_key_here' >> .env
-echo 'GEMINI_API_KEY=your_key_here' >> .env
+```
+
+Then install the package(s) for the LLM provider(s) you want to use:
+
+| Provider | Install command |
+|---|---|
+| Anthropic | `pip install anthropic` |
+| Gemini | `pip install google-genai` |
+| HuggingFace | `pip install huggingface_hub` |
+| Mistral | `pip install mistralai` |
+| Konstanz (vLLM) | `pip install openai` |
+| Local model | `pip install torch transformers` |
+
+Configure your chosen providers in [simulation_settings.toml](./backend/config/simulation_settings.toml), then copy [.env.example](./backend/.env.example) to `backend/.env` and fill in the API keys for the providers you are using.
+
+```bash
+cp .env.example .env   # then edit .env with your keys
 python main.py
 ```
-Which keys you need depends on the providers configured in [simulation_settings.toml](./backend/config/simulation_settings.toml). Currently there are Anthropic, HuggingFace (provider API) and Gemini /providers. It is also possible to specify a /local decoder model.
 
 ### Frontend
 ```bash

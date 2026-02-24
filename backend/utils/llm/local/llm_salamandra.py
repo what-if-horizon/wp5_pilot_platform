@@ -47,7 +47,7 @@ class SalamandraClient:
                 dtype=torch.float32,
             )
 
-    def generate_response(self, prompt: str, max_retries: int = 1) -> Optional[str]:
+    def generate_response(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
         """Synchronous response generation via local model."""
         import torch
 
@@ -56,15 +56,20 @@ class SalamandraClient:
 
         while attempts <= max_retries:
             try:
-                # Use the system role for the performer instructions (persona,
-                # task description, action-type block, chat log) and a short
-                # user message as the generation trigger.  The ChatML template
-                # is trained to treat the system slot as behavioural guidance,
-                # which matches the performer prompt's purpose.
-                messages = [
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": "Genera el mensaje de chat ahora."},
-                ]
+                # When a separate system_prompt is provided, use it in the
+                # system role and the prompt as the user message.  Otherwise
+                # fall back to the legacy layout where the entire prompt goes
+                # into the system slot with a short Spanish trigger as user.
+                if system_prompt is not None:
+                    messages = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ]
+                else:
+                    messages = [
+                        {"role": "system", "content": prompt},
+                        {"role": "user", "content": "Genera el mensaje de chat ahora."},
+                    ]
                 date_string = datetime.today().strftime("%Y-%m-%d")
 
                 templated = self.tokenizer.apply_chat_template(
@@ -110,11 +115,11 @@ class SalamandraClient:
 
         return None
 
-    async def generate_response_async(self, prompt: str, max_retries: int = 1) -> Optional[str]:
+    async def generate_response_async(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
         """Async wrapper — runs the blocking generate in a thread pool."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
-            None, lambda: self.generate_response(prompt, max_retries=max_retries)
+            None, lambda: self.generate_response(prompt, max_retries=max_retries, system_prompt=system_prompt)
         )
 
     def close(self) -> None:

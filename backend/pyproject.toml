@@ -7,12 +7,7 @@ dependencies = [
     "fastapi", # FastAPI framework
     "uvicorn[standard]", # ASGI server to run FastAPI
     "pydantic", # Data validation (used directly in API models)
-    "google-genai", # Google Gemini API client (NEW SDK)
-    "anthropic", # Anthropic API client (Director LLM)
-    "huggingface_hub", # HuggingFace Inference API client (Performer LLM)
     "python-dotenv", # to load API keys from .env
-    "torch", # PyTorch (local Salamandra model)
-    "transformers", # HuggingFace Transformers (local Salamandra model)
 ]
 
 [project.optional-dependencies]

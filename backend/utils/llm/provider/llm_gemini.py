@@ -28,7 +28,7 @@ class GeminiClient:
             # fall back to run_in_executor.
             self.aclient = None
 
-    def generate_response(self, prompt: str, max_retries: int = 1) -> Optional[str]:
+    def generate_response(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
         """Synchronous response generation (existing behavior).
 
         This method is kept for backward compatibility.
@@ -42,8 +42,13 @@ class GeminiClient:
                     model=self.model_name,
                     contents=prompt,
                 )
+                config = {}
                 if self.temperature is not None:
-                    kwargs["config"] = {"temperature": self.temperature}
+                    config["temperature"] = self.temperature
+                if system_prompt is not None:
+                    config["system_instruction"] = system_prompt
+                if config:
+                    kwargs["config"] = config
                 response = self.client.models.generate_content(**kwargs)
                 return response.text
 
@@ -57,7 +62,7 @@ class GeminiClient:
 
         return None
 
-    async def generate_response_async(self, prompt: str, max_retries: int = 1) -> Optional[str]:
+    async def generate_response_async(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
         """Async response generation using the async genai client when available.
 
         Falls back to running the sync client in a threadpool if the async client is
@@ -73,15 +78,20 @@ class GeminiClient:
                         model=self.model_name,
                         contents=prompt,
                     )
+                    config = {}
                     if self.temperature is not None:
-                        kwargs["config"] = {"temperature": self.temperature}
+                        config["temperature"] = self.temperature
+                    if system_prompt is not None:
+                        config["system_instruction"] = system_prompt
+                    if config:
+                        kwargs["config"] = config
                     resp = await self.aclient.models.generate_content(**kwargs)
                     return getattr(resp, "text", None)
                 else:
                     # Fallback: run sync client in executor
                     loop = asyncio.get_running_loop()
                     resp = await loop.run_in_executor(
-                        None, lambda: self.generate_response(prompt, max_retries=0)
+                        None, lambda: self.generate_response(prompt, max_retries=0, system_prompt=system_prompt)
                     )
                     return resp
 

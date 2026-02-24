@@ -3,8 +3,8 @@ from typing import Optional, List
 
 from models import Message, Agent
 from utils import Logger
-from agents.STAGE.director import build_director_prompt, parse_director_response
-from agents.STAGE.performer import build_performer_prompt
+from agents.STAGE.director import build_director_system_prompt, build_director_user_prompt, parse_director_response
+from agents.STAGE.performer import build_performer_system_prompt, build_performer_user_prompt
 
 
 @dataclass
@@ -37,14 +37,22 @@ class Orchestrator:
         state,
         logger: Logger,
         context_window_size: int = 10,
-        language: str = "EN",
+        chatroom_context: str = "",
     ):
         self.director_llm = director_llm
         self.performer_llm = performer_llm
         self.state = state
         self.logger = logger
         self.context_window_size = context_window_size
-        self.language = language
+        self.chatroom_context = chatroom_context
+
+        # System prompts are cached (session-static data only).
+        # Performer system prompt can be built immediately; Director needs
+        # treatment + human_user which arrive with the first execute_turn call.
+        self._performer_system_prompt = build_performer_system_prompt(
+            chatroom_context=chatroom_context,
+        )
+        self._director_system_prompt: Optional[str] = None
 
     async def execute_turn(self, treatment: str) -> Optional[TurnResult]:
         """Run one full Director->Performer cycle.
@@ -55,11 +63,25 @@ class Orchestrator:
         recent = self.state.get_recent_messages(self.context_window_size)
         agents = self.state.agents
 
-        # 2. Build and send the Director prompt
-        director_prompt = build_director_prompt(treatment, recent, agents, human_user=self.state.user_name, language=self.language)
+        # 2. Build and send the Director prompt (system + user)
+        if self._director_system_prompt is None:
+            self._director_system_prompt = build_director_system_prompt(
+                treatment=treatment,
+                human_user=self.state.user_name,
+                chatroom_context=self.chatroom_context,
+            )
+
+        director_user_prompt = build_director_user_prompt(
+            treatment, recent, agents,
+            human_user=self.state.user_name,
+            chatroom_context=self.chatroom_context,
+        )
         director_raw = None
         try:
-            director_raw = await self.director_llm.generate_response(director_prompt, max_retries=1)
+            director_raw = await self.director_llm.generate_response(
+                director_user_prompt, max_retries=1,
+                system_prompt=self._director_system_prompt,
+            )
         except Exception as e:
             self.logger.log_error("director_llm_call", str(e))
             return None
@@ -67,7 +89,7 @@ class Orchestrator:
         # Log the Director call
         self.logger.log_llm_call(
             agent_name="__director__",
-            prompt=director_prompt,
+            prompt=f"[SYSTEM]\n{self._director_system_prompt}\n\n[USER]\n{director_user_prompt}",
             response=director_raw,
             error=None if director_raw else "Director LLM returned no response",
         )
@@ -113,18 +135,21 @@ class Orchestrator:
                 None,
             )
 
-        performer_prompt = build_performer_prompt(
+        performer_user_prompt = build_performer_user_prompt(
             instruction=performer_instruction,
             action_type=action_type,
             messages=recent,
             target_message=target_message,
             target_user=target_user,
-            language=self.language,
+            chatroom_context=self.chatroom_context,
         )
 
         performer_raw = None
         try:
-            performer_raw = await self.performer_llm.generate_response(performer_prompt, max_retries=1)
+            performer_raw = await self.performer_llm.generate_response(
+                performer_user_prompt, max_retries=1,
+                system_prompt=self._performer_system_prompt,
+            )
         except Exception as e:
             self.logger.log_error("performer_llm_call", str(e))
             return None
@@ -132,7 +157,7 @@ class Orchestrator:
         # Log the Performer call
         self.logger.log_llm_call(
             agent_name=agent_name,
-            prompt=performer_prompt,
+            prompt=f"[SYSTEM]\n{self._performer_system_prompt}\n\n[USER]\n{performer_user_prompt}",
             response=performer_raw,
             error=None if performer_raw else "Performer LLM returned no response",
         )
