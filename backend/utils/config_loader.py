@@ -63,6 +63,8 @@ def validate_sim_config(path: str) -> dict:
         "director_llm_model",
         "performer_llm_provider",
         "performer_llm_model",
+        "moderator_llm_provider",
+        "moderator_llm_model",
         "context_window_size",
         "llm_concurrency_limit",
     ]
@@ -109,20 +111,20 @@ def validate_sim_config(path: str) -> dict:
         cfg["typing_delay_seconds"] = tds
 
         # LLM provider/model: must be non-empty strings
-        for key in ["director_llm_provider", "director_llm_model", "performer_llm_provider", "performer_llm_model"]:
+        for key in ["director_llm_provider", "director_llm_model", "performer_llm_provider", "performer_llm_model", "moderator_llm_provider", "moderator_llm_model"]:
             val = cfg[key]
             if not isinstance(val, str) or not val.strip():
                 raise ValueError(f"'{key}' must be a non-empty string")
 
         # director_temperature / performer_temperature: float in [0, 2] (optional, default 1.0)
-        for tkey in ["director_temperature", "performer_temperature"]:
+        for tkey in ["director_temperature", "performer_temperature", "moderator_temperature"]:
             tv = float(cfg.get(tkey, 1.0))
             if not (0.0 <= tv <= 2.0):
                 raise ValueError(f"'{tkey}' must be between 0.0 and 2.0")
             cfg[tkey] = tv
 
         # director_top_p / performer_top_p: float in [0, 1] (optional, default 1.0)
-        for pkey in ["director_top_p", "performer_top_p"]:
+        for pkey in ["director_top_p", "performer_top_p", "moderator_top_p"]:
             pv = float(cfg.get(pkey, 1.0))
             if not (0.0 <= pv <= 1.0):
                 raise ValueError(f"'{pkey}' must be between 0.0 and 1.0")

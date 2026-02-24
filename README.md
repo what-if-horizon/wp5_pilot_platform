@@ -8,8 +8,9 @@ Platform for integrating AI agents into simulated social media environments to s
 
 The platform is powered by **STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments), a multi-agent framework that separates agent coordination from message generation duties:
 
-- A **Director** (general reasoning model) analyses the chatroom state and decides which agent should act, what action to take, and provides structured instructions.
-- A **Performer** (instruction fine-tuned model) generates the actual chatroom message from the Director's instructions
+- A **Director** (large general reasoning model) analyses the chatroom state and decides which agent should act, what action to take, and provides structured instructions.
+- A **Performer** (smaller instruction fine-tuned model) generates the actual chatroom message from the Director's instructions.
+- A **Moderator** (smaller general reasoning model) extracts clean message content from the Performer's raw output, handling cases where smaller Performer models include extraneous commentary or formatting. If extraction fails, the Performer is retried (up to 3 attempts).
 
 This separation allows the Performer to be (instruction) fine-tuned for realistic online speech without compromising the Director's capacity for managing experimental conditions and multi-agent coordination. See the [backend documentation](./backend/README.md) for full details.
 

@@ -40,6 +40,15 @@ performer_llm_model = "BSC-LT/ALIA-40b-instruct-2601"
 performer_temperature = 0.8
 performer_top_p = 0.8
 
+### MODERATOR LLM SETTINGS ###
+# The Moderator extracts clean message content from the Performer's raw output,
+# stripping any commentary, formatting, or extraneous text.
+# A fast, cheap model is ideal since the task is simple extraction.
+moderator_llm_provider = "anthropic"
+moderator_llm_model = "claude-haiku-4-5-20251001"
+moderator_temperature = 0.0
+moderator_top_p = 1.0
+
 ### SHARED LLM SETTINGS ###
 # - context_window_size: how many recent messages to include in prompts (int)
 context_window_size = 10

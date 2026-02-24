@@ -51,9 +51,10 @@ class SimulationSession:
         # Load and validate simulation config
         self.simulation_config = validate_sim_config("config/simulation_settings.toml")
 
-        # Create two LLM managers: one for the Director, one for the Performer
+        # Create LLM managers for each pipeline stage
         self.director_llm = LLMManager.from_simulation_config(self.simulation_config, role="director")
         self.performer_llm = LLMManager.from_simulation_config(self.simulation_config, role="performer")
+        self.moderator_llm = LLMManager.from_simulation_config(self.simulation_config, role="moderator")
 
         # Set session RNG seed
         self._rng = random.Random(int(self.simulation_config["random_seed"]))
@@ -72,10 +73,11 @@ class SimulationSession:
             user_name=user_name,
         )
 
-        # Create the orchestrator (Director->Performer pipeline)
+        # Create the orchestrator (Director->Performer->Moderator pipeline)
         orchestrator = Orchestrator(
             director_llm=self.director_llm,
             performer_llm=self.performer_llm,
+            moderator_llm=self.moderator_llm,
             state=self.state,
             logger=self.logger,
             context_window_size=int(self.simulation_config["context_window_size"]),

@@ -7,16 +7,19 @@ All session activity is logged for research purposes.
 
 ## STAGE Framework
 
-**STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments) is the multi-agent coordination framework at the core of this platform. It uses a **Director-Performer** architecture to separate strategic reasoning from message generation.
+**STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments) is the multi-agent coordination framework at the core of this platform. It uses a **Director-Performer-Moderator** architecture to separate strategic reasoning from message generation and output validation.
 
-### Director-Performer Architecture
+### Director-Performer-Moderator Architecture
 
 | Component | Model | Role |
 |-----------|-------|------|
 | **Director** | general, reasoning | Decides which agent acts, selects action type, and provides structured instructions |
 | **Performer** | (instruction) fine-tuned  | Generates the actual chatroom message from the Director's instructions |
+| **Moderator** | lightweight, fast | Extracts clean message content from the Performer's raw output, stripping any extraneous commentary or formatting |
 
-**Why two models?** Fine-tuning the Performer on social media data produces realistic online speech but degrades the general reasoning needed for goal-oriented multi-agent orchestration. By isolating content generation from strategic reasoning, each model can be optimised independently.
+**Why two generation models?** Fine-tuning the Performer on social media data produces realistic online speech but degrades the general reasoning needed for goal-oriented multi-agent orchestration. By isolating content generation from strategic reasoning, each model can be optimised independently.
+
+**Why a Moderator?** Smaller Performer models sometimes fail to output only the chatroom message -- they may include reasoning, markdown formatting, or other extraneous text. The Moderator is a lightweight model that extracts the clean message content. If extraction fails, the Performer is retried (up to 3 attempts before the turn is skipped).
 
 ### Director Decision Criteria
 
@@ -52,12 +55,14 @@ The Director selects one of four action types per turn:
 2. Director outputs: JSON with reasoning, selected agent, action type, target, and Performer instructions
 3. Orchestrator: parses Director JSON, assembles Performer prompt with action-type context
 4. Performer receives: Director's instructions + chat log + action-type block
-5. Performer outputs: single chatroom message
-6. Orchestrator: formats message (e.g., prepends @mention), adds to session state, broadcasts via WebSocket
-7. Loop repeats on next tick
+5. Performer outputs: raw message text
+6. Moderator receives: Performer's raw output + action type
+7. Moderator outputs: clean message content (or NO_CONTENT to trigger retry of steps 4-6, up to 3 attempts)
+8. Orchestrator: formats message (e.g., prepends @mention), adds to session state, broadcasts via WebSocket
+9. Loop repeats on next tick
 ```
 
-For full prompt specifications, see [director_prompt.md](agents/STAGE/prompts/director_prompt.md) and [performer_prompt.md](agents/STAGE/prompts/performer_prompt.md).
+For full prompt specifications, see [director_prompt.md](agents/STAGE/prompts/system/director_prompt.md), [performer_prompt.md](agents/STAGE/prompts/system/performer_prompt.md), and [moderator_prompt.md](agents/STAGE/prompts/system/moderator_prompt.md).
 
 ## Simulation Loop
 
@@ -69,7 +74,7 @@ User messages are folded into the regular loop -- the Director sees them in the 
 
 ### `config/simulation_settings.toml`
 
-Session-level parameters: agent names, message pacing, LLM provider/model settings for both the Director and the Performer, context window size.
+Session-level parameters: agent names, message pacing, LLM provider/model settings for the Director, Performer, and Moderator, context window size.
 
 ### `config/experimental_settings.toml`
 
@@ -102,15 +107,20 @@ backend/
 ├── pyproject.toml                   # Dependencies and project metadata
 ├── agents/
 │   ├── agent_manager.py             # Bridges simulation loop to STAGE orchestrator
-│   └── STAGE/                       # STAGE framework (Director-Performer pipeline)
-│       ├── orchestrator.py          # Director->Performer pipeline coordination
+│   └── STAGE/                       # STAGE framework (Director-Performer-Moderator pipeline)
+│       ├── orchestrator.py          # Director->Performer->Moderator pipeline coordination
 │       ├── director.py              # Director prompt builder and response parser
 │       ├── performer.py             # Performer prompt builder
+│       ├── moderator.py             # Moderator prompt builder and response parser
 │       └── prompts/
-│           ├── director_prompt.md   # Director prompt template (EN)
-│           ├── director_prompt_es.md # Director prompt template (ES)
-│           ├── performer_prompt.md  # Performer prompt template (EN)
-│           └── performer_prompt_es.md # Performer prompt template (ES)
+│           ├── system/              # System prompt templates (session-static)
+│           │   ├── director_prompt.md
+│           │   ├── performer_prompt.md
+│           │   └── moderator_prompt.md
+│           └── user/                # User prompt templates (per-turn)
+│               ├── director_prompt.md
+│               ├── performer_prompt.md
+│               └── moderator_prompt.md
 ├── platforms/
 │   └── chatroom.py                  # Simulation session: tick loop, lifecycle, WebSocket wiring
 ├── models/
