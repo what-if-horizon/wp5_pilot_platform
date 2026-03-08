@@ -13,9 +13,11 @@ BASE_URL = "https://whatif.inf.uni-konstanz.de/v1"
 class KonstanzClient:
     """Client for the University of Konstanz vLLM endpoint (OpenAI-compatible)."""
 
-    def __init__(self, model_name: str = "BSC-LT/ALIA-40b-instruct-2601", temperature: float = None):
+    def __init__(self, model_name: str = "BSC-LT/ALIA-40b-instruct-2601", temperature: float = None, top_p: float = None, max_tokens: int = 1024):
         self.model_name = model_name
         self.temperature = temperature
+        self.top_p = top_p
+        self.max_tokens = max_tokens
         api_key = os.getenv("KONSTANZ_API_KEY", "")
 
         self.client = OpenAI(base_url=BASE_URL, api_key=api_key)
@@ -42,6 +44,9 @@ class KonstanzClient:
                 )
                 if self.temperature is not None:
                     kwargs["temperature"] = self.temperature
+                if self.top_p is not None:
+                    kwargs["top_p"] = self.top_p
+                kwargs["max_tokens"] = self.max_tokens
                 completion = self.client.chat.completions.create(**kwargs)
                 return completion.choices[0].message.content
 
@@ -73,6 +78,9 @@ class KonstanzClient:
                     )
                     if self.temperature is not None:
                         kwargs["temperature"] = self.temperature
+                    if self.top_p is not None:
+                        kwargs["top_p"] = self.top_p
+                    kwargs["max_tokens"] = self.max_tokens
                     completion = await self.aclient.chat.completions.create(**kwargs)
                     return completion.choices[0].message.content
                 else:

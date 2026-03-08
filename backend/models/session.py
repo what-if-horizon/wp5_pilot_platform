@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import List, Dict
+from datetime import datetime, timezone
+from typing import List, Dict, Optional
 from models.agent import Agent
 from models.message import Message
 
@@ -13,13 +13,13 @@ class SessionState:
     session_id: str
     agents: List[Agent]
     messages: List[Message] = field(default_factory=list)
-    start_time: datetime = field(default_factory=datetime.now)
+    start_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     duration_minutes: int = 15
-    # Identifier for the human participant in this session (default 'user')
-    user_name: str = "user"
+    # Canonical identifier for the human participant (privacy-safe; real name never leaves frontend)
+    user_name: str = "participant"
     experimental_config: dict = field(default_factory=dict)
     simulation_config: dict = field(default_factory=dict)
-    treatment_group: str = None
+    treatment_group: Optional[str] = None
     # Map of agent name -> ISO timestamp when the agent was blocked for this session
     # This allows keeping existing messages visible while suppressing new ones
     # created after the block time.
@@ -35,7 +35,7 @@ class SessionState:
     
     def is_expired(self) -> bool:
         """Check if the session has exceeded its duration."""
-        elapsed = (datetime.now() - self.start_time).total_seconds() / 60
+        elapsed = (datetime.now(timezone.utc) - self.start_time).total_seconds() / 60
         return elapsed >= self.duration_minutes
 
     def block_agent(self, agent_name: str, when_iso: str) -> None:

@@ -1,18 +1,41 @@
+"""Session manager — tracks live SimulationSession objects.
+
+Three-tier lookup strategy
+--------------------------
+1. Local in-process dict (fastest — zero network round-trips)
+2. Redis hash cache (cross-worker metadata, sub-millisecond)
+3. PostgreSQL sessions table (authoritative, crash-recovery source)
+
+Within a single worker the in-process dict is the primary store; the DB and
+Redis are updated on every create/end operation so other workers and crash-
+recovery restarts have access to up-to-date state.
+
+Crash recovery
+--------------
+If a worker crashes while sessions are active their DB rows remain in
+``status='active'``.  When any worker subsequently receives a WebSocket
+connection for that session_id it calls ``reconstruct_session()``, which
+loads the session metadata and full message history from the DB, re-creates
+the SimulationSession (without calling ``start()`` again for features that
+already seeded), and resumes the clock loop.
+"""
+from __future__ import annotations
+
 import asyncio
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from platforms import SimulationSession
+from db import connection as db_conn
+from db.repositories import session_repo, message_repo, config_repo
+from cache import redis_client
 
 
 class SessionManager:
-    """Singleton manager for simulation sessions.
+    """Singleton manager for concurrent simulation sessions."""
 
-    Provides async-safe create/get/remove operations and pending reservation support.
-    """
+    _instance: Optional["SessionManager"] = None
 
-    _instance = None
-
-    def __init__(self):
+    def __init__(self) -> None:
         self._sessions: Dict[str, SimulationSession] = {}
         self._pending: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
@@ -23,55 +46,205 @@ class SessionManager:
             cls._instance = SessionManager()
         return cls._instance
 
-    async def reserve_pending(self, session_id: str, info: Dict) -> None:
+    # ── Pending reservation (HTTP → WebSocket handoff) ────────────────────────
+
+    async def reserve_pending(
+        self,
+        session_id: str,
+        info: Dict,
+        *,
+        experiment_id: str,
+    ) -> None:
+        """Reserve a pending session slot (called from POST /session/start).
+
+        Writes to both the in-process pending dict and the DB so the record
+        survives an unlikely worker restart between HTTP and WebSocket steps.
+        """
         async with self._lock:
-            self._pending[session_id] = info
+            self._pending[session_id] = {**info, "experiment_id": experiment_id}
+
+        pool = db_conn.get_pool()
+        await session_repo.create_session(
+            pool,
+            session_id=session_id,
+            token=info.get("token", ""),
+            experiment_id=experiment_id,
+            treatment_group=info["treatment_group"],
+            user_name=info.get("user_name", "participant"),
+        )
 
     async def pop_pending(self, session_id: str) -> Dict:
         async with self._lock:
             return self._pending.pop(session_id, {})
 
-    async def create_session(self, session_id: str, websocket_send, treatment_group: str, user_name: str = "user") -> SimulationSession:
-        """Create and start a SimulationSession if not present; return the session.
+    # ── Session lifecycle ─────────────────────────────────────────────────────
 
-        `treatment_group` is required — sessions must always be created with a treatment.
+    async def create_session(
+        self,
+        session_id: str,
+        websocket_send: Callable,
+        *,
+        treatment_group: str,
+        user_name: str = "participant",
+        experiment_id: str = "default",
+    ) -> SimulationSession:
+        """Create, start, and register a new SimulationSession.
+
+        Loads the experiment config from the DB, then creates the session.
+        The session row in the DB is transitioned from 'pending' → 'active'
+        inside ``SimulationSession.start()``, and a Redis metadata cache entry
+        is written for cross-worker lookups.
         """
+        pool = db_conn.get_pool()
+        config = await config_repo.get_experiment_config(pool, experiment_id)
+        if not config:
+            raise RuntimeError(f"No config found for experiment '{experiment_id}'")
+
         async with self._lock:
             if session_id in self._sessions:
                 return self._sessions[session_id]
-            session = SimulationSession(session_id=session_id, websocket_send=websocket_send, treatment_group=treatment_group, user_name=user_name)
+            session = SimulationSession(
+                session_id=session_id,
+                websocket_send=websocket_send,
+                treatment_group=treatment_group,
+                user_name=user_name,
+                experiment_id=experiment_id,
+                _config=config,
+            )
             self._sessions[session_id] = session
 
-        # start outside the lock since it may await
+        # start() is awaited outside the lock (it spawns background tasks).
         await session.start()
+
+        # Cache metadata in Redis for other workers.
+        r = redis_client.get_redis()
+        await redis_client.cache_session(r, session_id, {
+            "treatment_group": treatment_group,
+            "user_name": user_name,
+            "experiment_id": experiment_id,
+            "status": "active",
+        })
+
         return session
 
     async def get_session(self, session_id: str) -> Optional[SimulationSession]:
+        """Return a session if it lives in this worker's process.
+
+        Does NOT attempt cross-worker reconstruction — callers that need that
+        should use ``get_or_reconstruct()``.
+        """
         async with self._lock:
             return self._sessions.get(session_id)
 
-    async def attach_or_create(self, session_id: str, websocket_send, treatment_group: Optional[str] = None) -> SimulationSession:
-        """Attach websocket to existing session or create/start a new one."""
+    async def get_or_reconstruct(
+        self,
+        session_id: str,
+        websocket_send: Callable,
+    ) -> Optional[SimulationSession]:
+        """Return an existing session or reconstruct one from the DB.
+
+        Used on WebSocket (re)connect to handle:
+        - Same-worker reconnect: fast path via in-process dict.
+        - Cross-worker reconnect: Redis cache says 'active' but not local
+          → reconstruct from DB and resume.
+        - Crash recovery: DB shows 'active' but Redis has no entry
+          → reconstruct from DB.
+        """
+        # Fast path — already live in this process.
         session = await self.get_session(session_id)
         if session:
-            await session.attach_websocket(websocket_send)
             return session
-        # create and start
-        # Pass through treatment_group (required by create_session)
-        if treatment_group is None:
-            raise RuntimeError("attach_or_create requires a treatment_group when creating a new session")
-        return await self.create_session(session_id, websocket_send, treatment_group=treatment_group)
+
+        # Check Redis for cross-worker metadata.
+        r = redis_client.get_redis()
+        cached = await redis_client.get_cached_session(r, session_id)
+        if cached and cached.get("status") == "active":
+            return await self._reconstruct_session(session_id, websocket_send, cached)
+
+        # Fall back to DB (covers crash-recovery scenario).
+        pool = db_conn.get_pool()
+        row = await session_repo.get_session(pool, session_id)
+        if row and row["status"] == "active":
+            meta = {
+                "treatment_group": row["treatment_group"],
+                "user_name": row["user_name"],
+                "experiment_id": row["experiment_id"],
+                "status": row["status"],
+            }
+            return await self._reconstruct_session(session_id, websocket_send, meta)
+
+        return None
+
+    async def _reconstruct_session(
+        self,
+        session_id: str,
+        websocket_send: Callable,
+        meta: Dict,
+    ) -> SimulationSession:
+        """Rebuild a SimulationSession from persisted state and resume it."""
+        experiment_id = meta.get("experiment_id", "default")
+        treatment_group = meta["treatment_group"]
+        user_name = meta.get("user_name", "participant")
+
+        pool = db_conn.get_pool()
+
+        # Load experiment config from DB.
+        config = await config_repo.get_experiment_config(pool, experiment_id)
+        if not config:
+            raise RuntimeError(f"No config found for experiment '{experiment_id}' during reconstruction")
+
+        # Load persisted messages and agent blocks so in-memory state is consistent.
+        msg_rows = await message_repo.get_session_messages(pool, session_id)
+        block_rows = await session_repo.get_agent_blocks(pool, session_id)
+
+        async with self._lock:
+            # Double-check — another coroutine may have reconstructed first.
+            if session_id in self._sessions:
+                return self._sessions[session_id]
+
+            session = SimulationSession(
+                session_id=session_id,
+                websocket_send=websocket_send,
+                treatment_group=treatment_group,
+                user_name=user_name,
+                experiment_id=experiment_id,
+                _preloaded_messages=msg_rows,
+                _preloaded_blocks=block_rows,
+                _config=config,
+            )
+            self._sessions[session_id] = session
+
+        # Resume the clock loop (but don't re-seed the scenario).
+        await session.resume()
+
+        r = redis_client.get_redis()
+        await redis_client.cache_session(r, session_id, {
+            "treatment_group": treatment_group,
+            "user_name": user_name,
+            "experiment_id": experiment_id,
+            "status": "active",
+        })
+        return session
 
     async def detach_websocket(self, session_id: str) -> None:
         session = await self.get_session(session_id)
         if session:
             session.detach_websocket()
 
-    async def remove_session(self, session_id: str) -> None:
+    async def remove_session(self, session_id: str, reason: str = "removed") -> None:
+        """Stop and remove a session, persisting its end state."""
         async with self._lock:
             session = self._sessions.pop(session_id, None)
+
         if session:
-            await session.stop(reason="removed")
+            await session.stop(reason=reason)
+
+        # Clean up Redis cache regardless.
+        try:
+            r = redis_client.get_redis()
+            await redis_client.invalidate_session(r, session_id)
+        except Exception as exc:
+            print(f"[SessionManager] Redis invalidation failed for {session_id}: {exc}")
 
     async def list_sessions(self) -> Dict[str, SimulationSession]:
         async with self._lock:

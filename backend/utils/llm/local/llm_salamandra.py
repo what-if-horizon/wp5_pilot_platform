@@ -15,14 +15,15 @@ class SalamandraClient:
         self,
         model_name: str = "BSC-LT/salamandra-7b-instruct",
         temperature: float = None,
-        max_new_tokens: int = 256,
+        max_tokens: int = 256,
+        top_p: float = None,  # accepted for API compatibility; not used by local inference
     ):
         import torch
         from transformers import AutoTokenizer, AutoModelForCausalLM
 
         self.model_name = model_name
         self.temperature = temperature
-        self.max_new_tokens = max_new_tokens
+        self.max_new_tokens = max_tokens
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 

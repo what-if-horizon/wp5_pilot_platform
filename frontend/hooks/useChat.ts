@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react"
 import { useWebSocket } from "./useWebSocket"
 import { useLocalStorage } from "./useLocalStorage"
-import { LS_SESSION_ID, LS_USERNAME, LS_BLOCKED } from "@/lib/constants"
+import { PARTICIPANT_SENDER, LS_SESSION_ID, LS_USERNAME, LS_BLOCKED } from "@/lib/constants"
 import {
   startSession as apiStartSession,
   likeMessage as apiLikeMessage,
@@ -31,21 +31,16 @@ export function useChat() {
 
   // Chat state
   const [messages, setMessages] = useState<Message[]>([])
-  const [currentUser, setCurrentUser] = useState<string | null>(null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [inputValue, setInputValue] = useState("")
+
+  // Typing indicator state (count of agents currently typing)
+  const [typingCount, setTypingCount] = useState(0)
 
   // Report modal state
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<Message | null>(null)
   const [reporting, setReporting] = useState(false)
-
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState<{
-    message: Message
-    x: number
-    y: number
-  } | null>(null)
 
   // Derived: participants list from observed senders
   const participants = useMemo(() => {
@@ -82,6 +77,10 @@ export function useChat() {
             : m,
         ),
       )
+    } else if (obj && obj.event_type === "typing_start") {
+      setTypingCount((prev) => prev + 1)
+    } else if (obj && obj.event_type === "typing_stop") {
+      setTypingCount((prev) => Math.max(0, prev - 1))
     } else if (obj && obj.event_type === "user_block") {
       const evt = obj as unknown as BlockEvent
       if (evt.blocked && typeof evt.blocked === "object") {
@@ -106,11 +105,11 @@ export function useChat() {
     onSessionInvalid: handleSessionInvalid,
   })
 
-  // Start session
+  // Start session — username never leaves the frontend (privacy by design).
+  // The backend always uses "participant" as the sender identity.
   const startSession = async (token: string, name: string) => {
-    const data = await apiStartSession(token, name)
+    const data = await apiStartSession(token)
     setSessionId(data.session_id)
-    setCurrentUser(name || token || "user")
     if (name) setUsername(name)
   }
 
@@ -127,17 +126,6 @@ export function useChat() {
 
     send(payload)
 
-    // Optimistic local append
-    const userMessage: Message = {
-      sender: "user",
-      content,
-      timestamp: new Date().toISOString(),
-      message_id: `user-${Date.now()}`,
-      reply_to: replyTo?.message_id,
-      quoted_text: replyTo?.content,
-      mentions: detectedMentions.length ? detectedMentions : undefined,
-    }
-    setMessages((prev) => [...prev, userMessage])
     setInputValue("")
     setReplyTo(null)
   }
@@ -145,7 +133,7 @@ export function useChat() {
   // Like message (with optimistic update + rollback)
   const toggleLike = async (msg: Message) => {
     if (!sessionId) return
-    const uid = currentUser || username || "user"
+    const uid = PARTICIPANT_SENDER
 
     // Optimistic update
     setMessages((prev) =>
@@ -205,7 +193,7 @@ export function useChat() {
   const performReport = async (block: boolean) => {
     if (!reportTarget || !sessionId) return
     setReporting(true)
-    const uid = currentUser || username || "user"
+    const uid = PARTICIPANT_SENDER
     const messageId = reportTarget.message_id
     const sender = reportTarget.sender
 
@@ -287,7 +275,6 @@ export function useChat() {
     sessionId,
     username,
     setUsername,
-    currentUser,
     startSession,
     // Connection
     isConnected,
@@ -314,8 +301,7 @@ export function useChat() {
     performReport,
     // Blocked
     blockedSenders,
-    // Context menu
-    contextMenu,
-    setContextMenu,
+    // Typing indicator
+    typingCount,
   }
 }

@@ -9,7 +9,7 @@ export interface Message {
   likes_count?: number
   liked_by?: string[]
   reported?: boolean
-  // Scenario seed messages (e.g. news articles)
+  // Feature seed messages (e.g. news articles)
   msg_type?: string
   headline?: string
   source?: string

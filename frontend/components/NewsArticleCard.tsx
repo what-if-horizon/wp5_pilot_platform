@@ -8,8 +8,8 @@ interface NewsArticleCardProps {
 export default function NewsArticleCard({ message }: NewsArticleCardProps) {
   return (
     <div className="flex justify-center my-2 px-4">
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200 max-w-[85%] w-full">
-        <div className="h-1 bg-header" />
+      <div className="bg-bg-surface rounded-lg shadow-sm overflow-hidden border border-border max-w-[85%] w-full">
+        <div className="h-1 bg-accent" />
         <div className="p-3.5">
           {message.source && (
             <p className="text-[11px] text-secondary uppercase tracking-wider mb-1 font-medium">

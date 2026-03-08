@@ -1,18 +1,20 @@
 "use client"
 
-import { useCallback, useRef } from "react"
 import type { Message } from "@/lib/types"
-import { getSenderColor } from "@/lib/constants"
+import { getSenderColor, PARTICIPANT_SENDER } from "@/lib/constants"
 import { formatMessageTime } from "@/lib/dates"
 import ReplyQuote from "./ReplyQuote"
-import DoubleCheck from "./DoubleCheck"
 
 interface MessageBubbleProps {
   message: Message
+  allMessages: Message[]
   isSelf: boolean
-  showTail: boolean
   showSender: boolean
-  onContextMenu: (msg: Message, x: number, y: number) => void
+  displayName: string
+  onReply: (msg: Message) => void
+  onLike: (msg: Message) => void
+  onMention: (sender: string) => void
+  onReport: (msg: Message) => void
 }
 
 function renderContent(content: string, mentions?: string[]) {
@@ -20,7 +22,6 @@ function renderContent(content: string, mentions?: string[]) {
     return content
   }
 
-  // Build a regex to match all @mentions in the text
   const escaped = mentions.map((m) =>
     m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
   )
@@ -29,7 +30,6 @@ function renderContent(content: string, mentions?: string[]) {
 
   return parts.map((part, i) => {
     if (pattern.test(part)) {
-      // Reset lastIndex since we're reusing the regex
       pattern.lastIndex = 0
       return (
         <span key={i} className="text-mention font-medium">
@@ -44,75 +44,64 @@ function renderContent(content: string, mentions?: string[]) {
 
 export default function MessageBubble({
   message,
+  allMessages,
   isSelf,
-  showTail,
   showSender,
-  onContextMenu,
+  displayName,
+  onReply,
+  onLike,
+  onMention,
+  onReport,
 }: MessageBubbleProps) {
-  const longPressTimer = useRef<number | null>(null)
+  // For display: show the user's local display name instead of "participant"
+  const senderLabel = isSelf ? displayName : message.sender
 
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      onContextMenu(message, e.clientX, e.clientY)
-    },
-    [message, onContextMenu],
-  )
-
-  const handleTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      const touch = e.touches[0]
-      longPressTimer.current = window.setTimeout(() => {
-        onContextMenu(message, touch.clientX, touch.clientY)
-      }, 500)
-    },
-    [message, onContextMenu],
-  )
-
-  const handleTouchEnd = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-  }, [])
-
-  const handleTouchMove = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-  }, [])
-
+  // Replace "participant" in agent message content with the user's local
+  // display name so references to the participant read naturally.
+  const renderedContent =
+    !isSelf && displayName
+      ? message.content.replace(/\bparticipant\b/g, displayName)
+      : message.content
+  const senderColor = getSenderColor(senderLabel)
   const likesCount = message.likes_count || 0
+  const isLiked = (message.liked_by || []).includes(PARTICIPANT_SENDER)
 
-  // Find the sender of the quoted message for ReplyQuote display
-  const quotedSender = message.reply_to ? "Quoted" : ""
+  const quotedSender = message.reply_to
+    ? allMessages.find((m) => m.message_id === message.reply_to)?.sender ?? ""
+    : ""
 
   return (
-    <div
-      className={`flex ${isSelf ? "justify-end" : "justify-start"} ${
-        showTail ? "mt-2" : "mt-0.5"
-      } ${isSelf ? "pr-2 pl-16" : "pl-2 pr-16"}`}
-    >
+    <div className={`message-card group px-3 py-0.5 ${showSender ? "mt-3" : "mt-0.5"}`}>
       <div
-        className={`relative max-w-[85%] rounded-lg shadow-sm px-2 pt-1.5 pb-1 ${
-          isSelf
-            ? `bg-bubble-out ${showTail ? "bubble-tail-right" : ""}`
-            : `bg-bubble-in ${showTail ? "bubble-tail-left" : ""}`
-        }`}
-        onContextMenu={handleContextMenu}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchMove={handleTouchMove}
+        className="relative bg-bg-surface rounded-lg border border-border px-3 pt-2.5 pb-2 transition-colors hover:border-secondary/20"
+        style={{ borderLeftWidth: "3px", borderLeftColor: senderColor }}
       >
-        {/* Sender name for incoming messages */}
-        {showSender && !isSelf && (
-          <p
-            className="text-[13px] font-medium mb-0.5 leading-tight"
-            style={{ color: getSenderColor(message.sender) }}
-          >
-            {message.sender}
-          </p>
+        {/* Top row: avatar + sender name + timestamp */}
+        {showSender && (
+          <div className="flex items-center gap-2 mb-1">
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+              style={{ backgroundColor: senderColor }}
+            >
+              {senderLabel.charAt(0).toUpperCase()}
+            </div>
+            <span
+              className="text-[13px] font-semibold"
+              style={{ color: senderColor }}
+            >
+              {senderLabel}
+            </span>
+            <span className="text-[11px] text-tertiary ml-auto">
+              {formatMessageTime(message.timestamp)}
+            </span>
+          </div>
+        )}
+
+        {/* Continuation: float timestamp */}
+        {!showSender && (
+          <span className="float-right text-[11px] text-tertiary ml-2 mt-0.5">
+            {formatMessageTime(message.timestamp)}
+          </span>
         )}
 
         {/* Reply quote */}
@@ -124,30 +113,75 @@ export default function MessageBubble({
                 ? message.quoted_text.slice(0, 150) + "\u2026"
                 : message.quoted_text
             }
-            isSelfBubble={isSelf}
           />
         )}
 
         {/* Message content */}
-        <p className="text-[14.2px] text-primary leading-[19px] whitespace-pre-wrap break-words pr-12">
-          {renderContent(message.content, message.mentions)}
+        <p className="text-[14px] text-primary leading-[1.45] whitespace-pre-wrap break-words">
+          {renderContent(renderedContent, message.mentions)}
         </p>
 
-        {/* Timestamp + tick row (absolute bottom-right to save space) */}
-        <span className="float-right relative -mr-0.5 -mb-1 ml-2 mt-1 flex items-center gap-1">
-          <span className="text-[11px] text-secondary leading-none">
-            {formatMessageTime(message.timestamp)}
-          </span>
-          {isSelf && <DoubleCheck />}
-        </span>
+        {/* Action buttons row */}
+        <div className="flex items-center gap-1 mt-1.5 -mb-0.5">
+          <button
+            onClick={() => onReply(message)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] text-secondary hover:bg-accent-soft hover:text-accent transition-colors"
+            aria-label="Reply to this message"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="9 17 4 12 9 7" />
+              <path d="M20 18v-2a4 4 0 00-4-4H4" />
+            </svg>
+            Reply
+          </button>
 
-        {/* Likes indicator */}
-        {likesCount > 0 && (
-          <div className="absolute -bottom-2.5 right-2 bg-white rounded-full shadow-md px-1.5 py-0.5 flex items-center gap-0.5 text-[11px] border border-gray-100">
-            <span className="text-red-500">&#10084;</span>
-            <span className="text-secondary">{likesCount}</span>
-          </div>
-        )}
+          <button
+            onClick={() => onLike(message)}
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] transition-colors ${
+              likesCount > 0
+                ? "bg-red-50 text-danger"
+                : "text-secondary hover:bg-red-50 hover:text-danger"
+            }`}
+            aria-label={isLiked ? "Unlike this message" : "Like this message"}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill={likesCount > 0 ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
+            </svg>
+            {likesCount > 0 ? likesCount : "Like"}
+          </button>
+
+          {!isSelf && (
+            <button
+              onClick={() => onMention(message.sender)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] text-secondary hover:bg-accent-soft hover:text-accent transition-colors"
+              aria-label={`Mention ${message.sender}`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94" />
+              </svg>
+              Mention
+            </button>
+          )}
+
+          {!isSelf && (
+            <button
+              onClick={() => onReport(message)}
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] transition-colors ${
+                message.reported
+                  ? "bg-red-50 text-danger"
+                  : "text-secondary hover:text-danger hover:bg-red-50"
+              }`}
+              aria-label="Report this message"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill={message.reported ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                <line x1="4" y1="22" x2="4" y2="15" />
+              </svg>
+              Report
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

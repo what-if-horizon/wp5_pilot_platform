@@ -38,7 +38,7 @@ def format_chat_log(messages: List[Message]) -> str:
     return "\n".join(lines)
 
 
-def build_director_system_prompt(treatment: str, human_user: str = "user", chatroom_context: str = "") -> str:
+def build_director_system_prompt(treatment: str, human_user: str = "participant", chatroom_context: str = "") -> str:
     """Build the Director system prompt with session-static data only.
 
     Per-turn dynamic data (chat log, available agents) is left as
@@ -51,7 +51,7 @@ def build_director_system_prompt(treatment: str, human_user: str = "user", chatr
     return prompt
 
 
-def build_director_user_prompt(treatment: str, messages: List[Message], agents: List[Agent], human_user: str = "user", chatroom_context: str = "") -> str:
+def build_director_user_prompt(treatment: str, messages: List[Message], agents: List[Agent], human_user: str = "participant", chatroom_context: str = "") -> str:
     """Build the full Director user prompt by injecting context, treatment, chat log, and human user name."""
     chat_log = format_chat_log(messages)
     agent_names = ", ".join(a.name for a in agents)

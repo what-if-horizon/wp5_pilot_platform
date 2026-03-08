@@ -4,17 +4,22 @@ version = "0.1.0"
 description = "Backend for WhatsApp Community chatroom experiment"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi", # FastAPI framework
+    "fastapi",           # FastAPI framework
     "uvicorn[standard]", # ASGI server to run FastAPI
-    "pydantic", # Data validation (used directly in API models)
-    "python-dotenv", # to load API keys from .env
+    "pydantic",          # Data validation (used directly in API models)
+    "python-dotenv",     # to load API keys from .env
+    "asyncpg",           # Async PostgreSQL driver
+    "redis[asyncio]",    # Async Redis client (includes hiredis speedups)
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest", # Testing framework
-    "black", # Code formatter 
-    "ruff", # Linter 
+    "pytest",              # Testing framework
+    "pytest-asyncio>=0.23", # Async test support (>=0.23 for session-scoped fixtures)
+    "fakeredis[aioredis]", # In-memory Redis mock for tests
+    "httpx",               # Async HTTP client for FastAPI test client
+    "black",               # Code formatter
+    "ruff",                # Linter
 ]
 
 [build-system]
@@ -22,8 +27,11 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["models*", "simulation*", "utils*"]
+include = ["models*", "utils*", "db*", "cache*", "agents*", "platforms*", "features*", "tests*"]
 exclude = ["config*", "logs*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.black]
 line-length = 100 #max chars per line 

@@ -223,6 +223,7 @@ HTML_HEAD = """\
   }}
   .llm-agent.director {{ color: var(--purple); }}
   .llm-agent.performer {{ color: var(--orange); }}
+  .llm-agent.moderator {{ color: var(--blue); }}
   .llm-sections {{ margin-top: 0.5rem; }}
 
   details {{
@@ -488,8 +489,16 @@ def render_llm_call(ev: dict) -> str:
     error = data.get("error")
 
     is_director = agent == "__director__"
-    role_label = "Director" if is_director else f"Performer → {agent}"
-    role_class = "director" if is_director else "performer"
+    is_moderator = agent == "__moderator__"
+    if is_director:
+        role_label = "Director"
+        role_class = "director"
+    elif is_moderator:
+        role_label = "Moderator"
+        role_class = "moderator"
+    else:
+        role_label = f"Performer \u2192 {agent}"
+        role_class = "performer"
     badge_class = "badge-llm_call"
 
     # For director responses, try to parse the JSON for a nice display
@@ -598,21 +607,10 @@ def render_generic(ev: dict) -> str:
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
-def generate_html(log_path: Path) -> str:
-    events = []
-    with open(log_path) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                events.append(json.loads(line))
-
-    if not events:
-        return "<html><body><p>Empty log file.</p></body></html>"
-
-    session_id = events[0].get("session_id", log_path.stem)
+def _render_events(events: list, session_id: str) -> str:
+    """Shared rendering logic for a list of parsed event dicts."""
     colour_map: dict[str, str] = {}
     parts = [HTML_HEAD.format(session_id=_esc(session_id))]
-
     timeline_opened = False
 
     for ev in events:
@@ -642,6 +640,39 @@ def generate_html(log_path: Path) -> str:
 
     parts.append(HTML_TAIL)
     return "\n".join(parts)
+
+
+def generate_html_from_lines(stream, session_id: str) -> str:
+    """Generate an HTML report from a file-like JSONL stream.
+
+    Used by the ``GET /session/{id}/report`` endpoint which builds the stream
+    from DB query results rather than a file on disk.
+    """
+    events = []
+    for line in stream:
+        line = line.strip() if isinstance(line, str) else line.strip()
+        if line:
+            events.append(json.loads(line))
+
+    if not events:
+        return f"<html><body><p>No events for session {html.escape(session_id)}.</p></body></html>"
+
+    return _render_events(events, session_id)
+
+
+def generate_html(log_path: Path) -> str:
+    events = []
+    with open(log_path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                events.append(json.loads(line))
+
+    if not events:
+        return "<html><body><p>Empty log file.</p></body></html>"
+
+    session_id = events[0].get("session_id", log_path.stem)
+    return _render_events(events, session_id)
 
 
 def main():

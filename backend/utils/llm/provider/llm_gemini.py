@@ -11,12 +11,14 @@ load_dotenv()
 class GeminiClient:
     """Client for interacting with Google Gemini API (sync + async helpers)."""
 
-    def __init__(self, model_name: str = "gemini-2.0-flash", temperature: float = None):
+    def __init__(self, model_name: str = "gemini-2.0-flash", temperature: float = None, top_p: float = None, max_tokens: int = 1024):
         """
         Initialize Gemini client. Creates both a sync client and an async wrapper (.aio).
         """
         self.model_name = model_name
         self.temperature = temperature
+        self.top_p = top_p
+        self.max_tokens = max_tokens
         # create sync client (underlying genai Client)
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         # async client wrapper (per genai docs)
@@ -45,6 +47,9 @@ class GeminiClient:
                 config = {}
                 if self.temperature is not None:
                     config["temperature"] = self.temperature
+                if self.top_p is not None:
+                    config["top_p"] = self.top_p
+                config["max_output_tokens"] = self.max_tokens
                 if system_prompt is not None:
                     config["system_instruction"] = system_prompt
                 if config:
@@ -81,6 +86,9 @@ class GeminiClient:
                     config = {}
                     if self.temperature is not None:
                         config["temperature"] = self.temperature
+                    if self.top_p is not None:
+                        config["top_p"] = self.top_p
+                    config["max_output_tokens"] = self.max_tokens
                     if system_prompt is not None:
                         config["system_instruction"] = system_prompt
                     if config:
@@ -119,7 +127,3 @@ class GeminiClient:
             self.client.close()
         except Exception:
             pass
-
-
-# Global instance for easy import
-gemini_client = GeminiClient()

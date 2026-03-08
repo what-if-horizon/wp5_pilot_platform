@@ -3,12 +3,11 @@ import type { SessionStartResponse } from "./types"
 
 export async function startSession(
   token: string,
-  username?: string,
 ): Promise<SessionStartResponse> {
   const res = await fetch(`${API_BASE}/session/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, username: username || undefined }),
+    body: JSON.stringify({ token }),
   })
   if (!res.ok) throw new Error("Invalid token")
   return res.json()

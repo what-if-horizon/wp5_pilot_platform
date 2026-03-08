@@ -11,10 +11,11 @@ load_dotenv()
 class MistralClient:
     """Client for interacting with the Mistral API (sync + async)."""
 
-    def __init__(self, model_name: str = "mistral-large-latest", temperature: float = None, top_p: float = None):
+    def __init__(self, model_name: str = "mistral-large-latest", temperature: float = None, top_p: float = None, max_tokens: int = 1024):
         self.model_name = model_name
         self.temperature = temperature
         self.top_p = top_p
+        self.max_tokens = max_tokens
         api_key = os.getenv("MISTRAL_API_KEY")
 
         self.client = Mistral(api_key=api_key)
@@ -39,6 +40,7 @@ class MistralClient:
                     kwargs["temperature"] = self.temperature
                 if self.top_p is not None:
                     kwargs["top_p"] = self.top_p
+                kwargs["max_tokens"] = self.max_tokens
                 response = self.client.chat.complete(**kwargs)
                 return response.choices[0].message.content
 
@@ -72,6 +74,7 @@ class MistralClient:
                     kwargs["temperature"] = self.temperature
                 if self.top_p is not None:
                     kwargs["top_p"] = self.top_p
+                kwargs["max_tokens"] = self.max_tokens
                 response = await self.client.chat.complete_async(**kwargs)
                 return response.choices[0].message.content
 
@@ -86,9 +89,9 @@ class MistralClient:
         return None
 
     async def aclose(self) -> None:
-        """Close the async client if present."""
+        """Close the client (Mistral SDK close is sync)."""
         try:
-            await self.client.close()
+            self.client.close()
         except Exception:
             pass
 

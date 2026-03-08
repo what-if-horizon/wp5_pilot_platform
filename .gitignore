@@ -37,7 +37,7 @@ env.bak/
 venv.bak/
 .venv/
 
-# Environment variables (contains API keys!)
+# Environment variables (contains API keys!!!)
 backend/.env
 .env
 

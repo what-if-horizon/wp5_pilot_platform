@@ -38,8 +38,12 @@ export function useWebSocket({
       }
 
       ws.onmessage = (event) => {
-        const obj = JSON.parse(event.data)
-        onMessageRef.current(obj)
+        try {
+          const obj = JSON.parse(event.data)
+          onMessageRef.current(obj)
+        } catch (e) {
+          console.error("Failed to parse WebSocket message:", e)
+        }
       }
 
       ws.onclose = (event: CloseEvent) => {

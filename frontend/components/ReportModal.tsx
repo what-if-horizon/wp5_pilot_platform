@@ -55,14 +55,14 @@ export default function ReportModal({
           <button
             onClick={onClose}
             disabled={reporting}
-            className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-secondary hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-lg border border-border text-secondary hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={onReport}
             disabled={reporting}
-            className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-primary hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-lg border border-border text-primary hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Report
           </button>

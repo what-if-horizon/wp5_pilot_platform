@@ -11,12 +11,14 @@ load_dotenv()
 class HuggingFaceClient:
     """Client for interacting with HuggingFace Inference API (sync + async)."""
 
-    def __init__(self, model_name: str = "meta-llama/Llama-3.1-8B-Instruct:novita", temperature: float = None):
+    def __init__(self, model_name: str = "meta-llama/Llama-3.1-8B-Instruct:novita", temperature: float = None, top_p: float = None, max_tokens: int = 1024):
         """
         Initialize HuggingFace client. Creates both a sync client and an async client.
         """
         self.model_name = model_name
         self.temperature = temperature
+        self.top_p = top_p
+        self.max_tokens = max_tokens
         api_key = os.getenv("HF_API_KEY")
 
         # Create sync client
@@ -48,6 +50,9 @@ class HuggingFaceClient:
                 )
                 if self.temperature is not None:
                     kwargs["temperature"] = self.temperature
+                if self.top_p is not None:
+                    kwargs["top_p"] = self.top_p
+                kwargs["max_tokens"] = self.max_tokens
                 completion = self.client.chat.completions.create(**kwargs)
                 return completion.choices[0].message.content
 
@@ -83,6 +88,9 @@ class HuggingFaceClient:
                     )
                     if self.temperature is not None:
                         kwargs["temperature"] = self.temperature
+                    if self.top_p is not None:
+                        kwargs["top_p"] = self.top_p
+                    kwargs["max_tokens"] = self.max_tokens
                     completion = await self.aclient.chat.completions.create(**kwargs)
                     return completion.choices[0].message.content
                 else:
@@ -117,7 +125,3 @@ class HuggingFaceClient:
             self.client.close()
         except Exception:
             pass
-
-
-# Global instance for easy import
-huggingface_client = HuggingFaceClient()

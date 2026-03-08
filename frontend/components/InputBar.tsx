@@ -11,7 +11,6 @@ interface InputBarProps {
   replyTo: Message | null
   onCancelReply: () => void
   onSend: () => void
-  onMentionInsert?: (sender: string) => void
 }
 
 export default function InputBar({
@@ -34,17 +33,16 @@ export default function InputBar({
   )
 
   return (
-    <div className="bg-input-bar border-t border-gray-200">
+    <div className="bg-bg-surface border-t border-border">
       {/* Reply preview strip */}
       {replyTo && (
-        <div className="mx-3 mt-2 flex items-stretch bg-white rounded-t-lg overflow-hidden border-b border-gray-100">
+        <div className="mx-3 mt-2 flex items-stretch bg-bg-feed rounded-lg overflow-hidden border border-border">
           <div
-            className="w-1 shrink-0"
-            style={{ backgroundColor: getSenderColor(replyTo.sender) }}
+            className="w-1 shrink-0 bg-quote"
           />
           <div className="flex-1 min-w-0 px-3 py-2">
             <p
-              className="text-xs font-medium mb-0.5"
+              className="text-xs font-semibold mb-0.5"
               style={{ color: getSenderColor(replyTo.sender) }}
             >
               {replyTo.sender}
@@ -57,12 +55,12 @@ export default function InputBar({
           </div>
           <button
             onClick={onCancelReply}
-            className="px-3 text-secondary hover:text-primary transition-colors self-center"
+            className="px-3 text-tertiary hover:text-primary transition-colors self-center"
             aria-label="Cancel reply"
           >
             <svg
-              width="18"
-              height="18"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="currentColor"
               aria-hidden="true"
@@ -74,22 +72,22 @@ export default function InputBar({
       )}
 
       {/* Input row */}
-      <div className="flex items-end gap-2 px-3 py-2">
-        <div className="flex-1 bg-white rounded-full px-4 py-2 flex items-center shadow-sm">
+      <div className="flex items-end gap-2 px-3 py-2.5">
+        <div className="flex-1 bg-bg-feed border border-border rounded-lg px-3.5 py-2.5 flex items-center focus-within:border-accent focus-within:ring-1 focus-within:ring-accent/20 transition-all">
           <input
             ref={inputRef}
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message"
-            className="flex-1 text-sm bg-transparent outline-none text-primary placeholder:text-secondary/60"
+            placeholder="Write a message..."
+            className="flex-1 text-sm bg-transparent outline-none text-primary placeholder:text-tertiary"
             aria-label="Message input"
           />
         </div>
         <button
           onClick={onSend}
-          className="w-10 h-10 rounded-full bg-send-btn hover:bg-send-btn-hover flex items-center justify-center shrink-0 transition-colors shadow-sm"
+          className="px-4 h-[42px] rounded-lg bg-accent hover:bg-accent-hover flex items-center justify-center shrink-0 transition-colors text-white"
           aria-label="Send message"
         >
           <SendIcon />

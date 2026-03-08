@@ -1,19 +1,18 @@
-import asyncio
-from typing import Callable, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
-from models import Message
 from agents.STAGE.orchestrator import Orchestrator, TurnResult
+from db import connection as db_conn
+from db.repositories import message_repo
+from cache import redis_client
 
 
 class AgentManager:
     """Bridges the simulation loop and the STAGE framework orchestrator.
 
     Responsibilities:
-    - hold references to state, logger, websocket, and orchestrator
-    - execute a Director->Performer turn via the orchestrator
-    - handle the result (persist message, broadcast via websocket, handle likes)
-    - apply typing delay for realism
+    - persist agent messages to DB (awaited)
+    - broadcast messages via Redis pub/sub (decoupled from WebSocket)
+    - handle like actions (DB + broadcast)
     """
 
     def __init__(
@@ -21,73 +20,68 @@ class AgentManager:
         state,
         orchestrator: Orchestrator,
         logger,
-        websocket_send: Optional[Callable] = None,
-        typing_delay_seconds: float = 1.0,
+        session_id: str,
+        experiment_id: str = "default",
     ) -> None:
         self.state = state
         self.orchestrator = orchestrator
         self.logger = logger
-        self.websocket_send = websocket_send or (lambda *_: None)
-        self.typing_delay_seconds = typing_delay_seconds
-
-    def set_websocket_send(self, websocket_send: Optional[Callable]) -> None:
-        self.websocket_send = websocket_send or (lambda *_: None)
-
-    async def execute_turn(self, treatment: str) -> Optional[TurnResult]:
-        """Run one Director->Performer turn and handle the result.
-
-        Returns the TurnResult on success, or None on failure.
-        """
-        result = await self.orchestrator.execute_turn(treatment)
-        if result is None:
-            return None
-
-        if result.action_type == "like":
-            await self._handle_like(result)
-        else:
-            await self._handle_message(result)
-
-        return result
+        self.session_id = session_id
+        self.experiment_id = experiment_id
 
     async def _handle_message(self, result: TurnResult) -> None:
-        """Persist and broadcast a generated message."""
+        """Persist and broadcast a generated agent message."""
         message = result.message
         if not message:
             return
 
-        # Apply a configurable typing delay
-        if self.typing_delay_seconds > 0:
-            await asyncio.sleep(self.typing_delay_seconds)
+        # Add to in-memory state (for context window and message lookup).
+        self.state.add_message(message)
 
-        # Persist to session state
+        # Persist to DB (awaited — agent messages are primary research data).
         try:
-            self.state.add_message(message)
-        except Exception:
-            pass
+            pool = db_conn.get_pool()
+            await message_repo.insert_message(
+                pool,
+                message_id=message.message_id,
+                session_id=self.session_id,
+                experiment_id=self.experiment_id,
+                sender=message.sender,
+                content=message.content,
+                sent_at=message.timestamp,
+                reply_to=message.reply_to,
+                quoted_text=message.quoted_text,
+                mentions=message.mentions,
+                metadata=message.metadata,
+            )
+        except Exception as exc:
+            self.logger.log_error("persist_agent_message", str(exc))
 
-        # Log the message
+        # Push to Redis context window.
         try:
-            self.logger.log_message(message.to_dict())
-        except Exception:
-            pass
+            r = redis_client.get_redis()
+            await redis_client.push_to_window(r, self.session_id, message.to_dict())
+        except Exception as exc:
+            self.logger.log_error("push_agent_message_window", str(exc))
 
-        # Send to frontend via websocket
+        # Log the message event (fire-and-forget to events table).
+        self.logger.log_message(message.to_dict())
+
+        # Publish via Redis pub/sub — the subscriber loop in SimulationSession
+        # will deliver this to the connected WebSocket.
         try:
-            await self.websocket_send(message.to_dict())
-        except Exception as e:
-            try:
-                self.logger.log_error("send", str(e))
-            except Exception:
-                pass
+            r = redis_client.get_redis()
+            await redis_client.publish_event(r, self.session_id, message.to_dict())
+        except Exception as exc:
+            self.logger.log_error("publish_agent_message", str(exc))
 
     async def _handle_like(self, result: TurnResult) -> None:
-        """Process a 'like' action from the Director."""
+        """Process an agent 'like' action — update DB and broadcast."""
         target_id = result.target_message_id
         agent_name = result.agent_name
         if not target_id:
             return
 
-        # Find the target message and toggle like
         target_msg = next(
             (m for m in self.state.messages if m.message_id == target_id),
             None,
@@ -98,29 +92,34 @@ class AgentManager:
 
         target_msg.toggle_like(agent_name)
 
-        # Log the like event
+        # Persist updated likes to DB.
         try:
-            self.logger.log_event("agent_like", {
-                "agent_name": agent_name,
-                "message_id": target_id,
-                "likes_count": target_msg.likes_count,
-            })
-        except Exception:
-            pass
+            pool = db_conn.get_pool()
+            await message_repo.update_message_likes(
+                pool, target_id, list(target_msg.liked_by)
+            )
+        except Exception as exc:
+            self.logger.log_error("persist_like", str(exc))
 
-        # Broadcast the like event to websocket
+        # Log the like event.
+        self.logger.log_event("agent_like", {
+            "agent_name": agent_name,
+            "message_id": target_id,
+            "likes_count": target_msg.likes_count,
+        })
+
+        # Broadcast via Redis pub/sub.
+        like_event = {
+            "event_type": "message_like",
+            "message_id": target_id,
+            "action": "liked",
+            "likes_count": target_msg.likes_count,
+            "liked_by": list(target_msg.liked_by),
+            "user": agent_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
         try:
-            await self.websocket_send({
-                "event_type": "message_like",
-                "message_id": target_id,
-                "action": "liked",
-                "likes_count": target_msg.likes_count,
-                "liked_by": list(target_msg.liked_by),
-                "user": agent_name,
-                "timestamp": datetime.now().isoformat(),
-            })
-        except Exception as e:
-            try:
-                self.logger.log_error("send_like", str(e))
-            except Exception:
-                pass
+            r = redis_client.get_redis()
+            await redis_client.publish_event(r, self.session_id, like_event)
+        except Exception as exc:
+            self.logger.log_error("publish_like", str(exc))

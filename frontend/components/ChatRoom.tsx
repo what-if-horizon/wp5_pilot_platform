@@ -1,18 +1,16 @@
 "use client"
 
-import { useCallback } from "react"
 import type { Message } from "@/lib/types"
 import ChatHeader from "./ChatHeader"
 import MessageFeed from "./MessageFeed"
 import InputBar from "./InputBar"
 import ReportModal from "./ReportModal"
-import ContextMenu from "./ContextMenu"
 
 interface ChatRoomProps {
   // Messages
   visibleMessages: Message[]
   participants: string[]
-  currentUser: string | null
+  displayName: string
   // Connection
   isConnected: boolean
   // Input
@@ -32,19 +30,13 @@ interface ChatRoomProps {
   setReportTarget: (msg: Message | null) => void
   reporting: boolean
   performReport: (block: boolean) => void
-  // Context menu
-  contextMenu: { message: Message; x: number; y: number } | null
-  setContextMenu: (
-    cm: { message: Message; x: number; y: number } | null,
-  ) => void
-  // Username for mention insertion
-  username: string
+  typingCount: number
 }
 
 export default function ChatRoom({
   visibleMessages,
   participants,
-  currentUser,
+  displayName,
   isConnected,
   inputValue,
   setInputValue,
@@ -58,21 +50,10 @@ export default function ChatRoom({
   setReportTarget,
   reporting,
   performReport,
-  contextMenu,
-  setContextMenu,
+  typingCount,
 }: ChatRoomProps) {
-  const handleContextMenu = useCallback(
-    (msg: Message, x: number, y: number) => {
-      setContextMenu({ message: msg, x, y })
-    },
-    [setContextMenu],
-  )
-
-  const isSelf = (sender: string) =>
-    sender === currentUser || sender === "user"
-
   return (
-    <div className="flex flex-col h-dvh max-w-3xl mx-auto bg-white shadow-lg relative">
+    <div className="flex flex-col h-dvh max-w-3xl mx-auto bg-bg-surface shadow-lg relative">
       <ChatHeader
         participantCount={participants.length}
         isConnected={isConnected}
@@ -80,8 +61,15 @@ export default function ChatRoom({
 
       <MessageFeed
         messages={visibleMessages}
-        currentUser={currentUser}
-        onContextMenu={handleContextMenu}
+        displayName={displayName}
+        typingCount={typingCount}
+        onReply={(msg) => setReplyTo(msg)}
+        onLike={(msg) => toggleLike(msg)}
+        onMention={(sender) => setInputValue(inputValue + `@${sender} `)}
+        onReport={(msg) => {
+          setReportTarget(msg)
+          setReportModalOpen(true)
+        }}
       />
 
       <InputBar
@@ -91,33 +79,6 @@ export default function ChatRoom({
         onCancelReply={() => setReplyTo(null)}
         onSend={sendMessage}
       />
-
-      {/* Context menu */}
-      {contextMenu && (
-        <ContextMenu
-          message={contextMenu.message}
-          x={contextMenu.x}
-          y={contextMenu.y}
-          isSelf={isSelf(contextMenu.message.sender)}
-          isLiked={
-            (contextMenu.message.liked_by || []).includes(
-              currentUser || "user",
-            )
-          }
-          likesCount={contextMenu.message.likes_count || 0}
-          onReply={() => setReplyTo(contextMenu.message)}
-          onLike={() => toggleLike(contextMenu.message)}
-          onMention={() => {
-            const mentionText = `@${contextMenu.message.sender} `
-            setInputValue(inputValue + mentionText)
-          }}
-          onReport={() => {
-            setReportTarget(contextMenu.message)
-            setReportModalOpen(true)
-          }}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
 
       {/* Report modal */}
       {reportModalOpen && reportTarget && (

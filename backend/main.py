@@ -1,263 +1,304 @@
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from datetime import datetime
-from typing import Optional, Dict
-import uuid
+import io
 import json
+import os
+import secrets
+import string
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+import uuid
 
-#check that tomllib is available (for parsing configs)
-try:
-    import tomllib  # Python 3.11+ stdlib   
-except Exception:
-    raise RuntimeError("TOML support required (Python 3.11+). Please run with Python >=3.11")
-from pathlib import Path
+from fastapi import FastAPI, Header, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, StreamingResponse
+from pydantic import BaseModel
+from dotenv import load_dotenv
 
-# Import simulation logic (i.e., platform)
-#NOTE: for pilot we only have one simulation type (chatroom)
+load_dotenv()
+
 from platforms import SimulationSession
-# Import concurrent session manager: 
 from utils.session_manager import session_manager
-# Import login token manager
 from utils import token_manager
+from utils.log_viewer import generate_html_from_lines
+from db import connection as db_conn
+from cache import redis_client
+from db.repositories import message_repo, session_repo, event_repo, config_repo
+from features import AVAILABLE_FEATURES, FEATURES_META
 
 
-# Initialize FastAPI app - 
-app = FastAPI(title="Simulcra: Prototype Backend")
+# ── Configuration ─────────────────────────────────────────────────────────────
 
-# CORS middleware for safe cross-origin requests)
-# NOTE: minimal settings for local dev (change later)
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://wp5user:wp5pass@localhost:5432/wp5"
+)
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+_experiment_id: str = ""
+
+
+def get_experiment_id() -> str:
+    """Return the active experiment ID, or raise if none is set."""
+    if not _experiment_id:
+        raise HTTPException(
+            status_code=409,
+            detail="No experiment is active. Use the admin wizard to configure one.",
+        )
+    return _experiment_id
+
+
+ADMIN_PASSPHRASE = os.environ.get("ADMIN_PASSPHRASE", "")
+
+
+# ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):  # noqa: F841 — FastAPI requires the parameter
+    # ── Startup ──
+    if not ADMIN_PASSPHRASE:
+        raise RuntimeError(
+            "ADMIN_PASSPHRASE is not set. The admin panel is required for study setup — "
+            "please set ADMIN_PASSPHRASE in your .env file."
+        )
+
+    # Connect to PostgreSQL and apply schema.
+    pool = await db_conn.init_pool(DATABASE_URL)
+    print(f"DB pool ready ({DATABASE_URL})")
+
+    # Connect to Redis.
+    await redis_client.init_redis(REDIS_URL)
+    print(f"Redis ready ({REDIS_URL})")
+
+    print("Backend ready. Configure experiments via the admin panel at /admin.")
+
+    yield
+
+    # ── Shutdown ──
+    sessions = await session_manager.list_sessions()
+    for sid, session in sessions.items():
+        try:
+            await session.stop(reason="server_shutdown")
+        except Exception as e:
+            print(f"Error stopping session {sid} during shutdown: {e}")
+
+    await db_conn.close_pool()
+    await redis_client.close_redis()
+    print("DB pool and Redis connections closed.")
+
+
+# ── App ───────────────────────────────────────────────────────────────────────
+
+app = FastAPI(title="Simulcra: Backend", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-    allow_credentials=False, # We do NOT yet need cookies (maybe later...)
-    allow_methods=["GET", "POST", "OPTIONS"], # Permitted HTTP methods...
-    allow_headers=["Authorization", "Content-Type"], # Permitted HTTP headers...
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Key"],
 )
 
-# Set sentinel state for websocket: 
-active_websocket: Optional[WebSocket] = None
 
+# ── Pydantic request/response models ─────────────────────────────────────────
 
-# Startup validation: check that participant tokens reference existing experimental groups
-#NOTE: researcher pre-configures these in /config/experimental_settings.toml and /config/participant_tokens.toml
-try:
-    base = Path(__file__).resolve().parent
-    exp_toml = base / "config" / "experimental_settings.toml"
-
-    if not exp_toml.exists():
-        raise FileNotFoundError("No experimental_settings.toml found in backend/config; please create one.")
-
-    # tomllib requires binary mode
-    with open(exp_toml, "rb") as f:
-        experimental_settings = tomllib.load(f)
-
-    token_manager.validate_against_experiments(experimental_settings)
-    print("Participant tokens validated against experimental settings.")
-except Exception as e:
-    print(f"Startup validation error: {e}")
-    raise
-
-
-# Pydantic for validation at HTTP boundary
-#NOTE: this guards against malformed requests/responses
 class SessionStartRequest(BaseModel):
-    """Request model for starting a session.
+    token: str
 
-    `username` is optional for the prototype UI which supplies only a token.
-    When omitted, the token string will be used as the display name.
-    """
-    token: str  # single-use participant token (validated against config/participant_tokens.toml)
-    username: Optional[str] = None
 
 class SessionStartResponse(BaseModel):
-    """Response model for session start."""
-    session_id: str #from uuid 
-    message: str #confirmation message (e.g. treatment group info)
+    session_id: str
+    message: str
 
 
 class LikeRequest(BaseModel):
-    """Request model for liking/unliking a message.
-
-    Prototype uses a simple toggle-only API. Clients submit their user id
-    and the server will flip their like state for the message.
-    """
     user: str
 
 
 class ReportRequest(BaseModel):
-    """Request model for reporting a message.
-
-    user: reporter id (prototype uses the client token/display name)
-    block: whether to also block the sender (default: False)
-    reason: optional free-text reason
-    """
     user: str
     block: Optional[bool] = False
     reason: Optional[str] = None
 
 
-#ENDPOINT 1 for starting a new session - 
-#NOTE: at this point we begin asynchronous session management (multiple user-sessions)
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _get_pool():
+    """Return the DB pool or raise a 503 if not yet initialised."""
+    try:
+        return db_conn.get_pool()
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+
+# ── HTTP endpoints ────────────────────────────────────────────────────────────
+
 @app.post("/session/start", response_model=SessionStartResponse)
 async def start_session(request: SessionStartRequest):
+    """Start a new simulation session.
+
+    Validates and atomically consumes the participant token via the DB
+    (PostgreSQL SELECT FOR UPDATE — safe across multiple workers).
+    The experiment_id is resolved from the token row.
     """
-    Start a new simulation session.
-    
-    Requires a valid single-use participant token. Tokens are validated and
-    consumed using `utils.token_manager` against `backend/config/participant_tokens.toml`.
-    """
-    global active_session
-    
-    # Generate session ID up-front and atomically consume the participant token
-    # using the same session_id so logs reference the same session identifier.
     session_id = str(uuid.uuid4())
-    group = token_manager.consume_token(request.token, session_id=session_id)
-    if not group:
-        # Either invalid or already used
+
+    pool = _get_pool()
+    result = await token_manager.consume_token(pool, request.token, session_id)
+    if not result:
         raise HTTPException(status_code=401, detail="Invalid or already-used token")
 
-    # Reserve pending session with treatment group
-    # Store requested username/handle to be attached to the session when websocket connects
-    # If the client didn't provide a username, fall back to the token string so
-    # the frontend can start sessions by submitting only a token.
-    user_name = request.username or request.token
-    await session_manager.reserve_pending(session_id, {"treatment_group": group, "user_name": user_name})
+    group, experiment_id = result
 
-    # Return session id and confirmation message
+    # Check experiment availability (date window + paused status).
+    unavailable = await config_repo.check_experiment_availability(pool, experiment_id)
+    if unavailable:
+        # Roll back token consumption so the participant can try again later.
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE tokens SET used = FALSE, used_at = NULL, session_id = NULL WHERE token = $1",
+                request.token,
+            )
+        raise HTTPException(status_code=403, detail=unavailable)
+
+    await session_manager.reserve_pending(
+        session_id,
+        {"treatment_group": group, "user_name": "participant", "token": request.token},
+        experiment_id=experiment_id,
+    )
+
     return SessionStartResponse(
         session_id=session_id,
-        message=f"Session created with treatment group {group}. Connect via WebSocket to start."
+        message=f"Session created (group: {group}). Connect via WebSocket to start.",
     )
 
 
-#ENDPOINT 2 for websocket connection - chat communication
-@app.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    """
-    WebSocket endpoint for real-time chat communication.
-    
-    Handles:
-    - Receiving user messages
-    - Sending agent messages
-    - Session lifecycle
-    """
-    global active_session, active_websocket
-    
-    await websocket.accept()
-    active_websocket = websocket
-
-    # Create a send helper which uses the currently-accepted websocket
-    async def send_to_frontend(message_dict: dict):
-        """Helper to send messages to frontend via WebSocket."""
-        if active_websocket:
-            await active_websocket.send_json(message_dict)
-
-    # First, check if a session already exists for this session_id (reconnect case)
-    session = await session_manager.get_session(session_id)
-    if session:
-        # Attach websocket to existing session and continue
-        await session.attach_websocket(send_to_frontend)
-        active_session = session
-    else:
-        # No existing session: check for pending session info (treatment group) saved at /session/start
-        pending = await session_manager.pop_pending(session_id)
-        treatment_group = pending.get("treatment_group")
-
-        # A treatment_group MUST be present for creating a new session (sessions are experimental and require assignment).
-        if not treatment_group:
-            # Close the websocket with policy violation and stop.
-            await websocket.close(code=1008)
-            print(f"WebSocket connection for session {session_id} rejected: missing treatment_group")
-            return
-
-        # Create and start a new session with the reserved treatment_group
-        user_name = pending.get("user_name") or "user"
-        session = await session_manager.create_session(session_id, send_to_frontend, treatment_group=treatment_group, user_name=user_name)
-        active_session = session
-    
-    try:
-        while True:
-            # Receive message from frontend
-            data = await websocket.receive_json()
-
-            # Expected format: {"type": "user_message", "content": "..."}
-            if data.get("type") == "user_message":
-                content = data.get("content", "").strip()
-                # Optional reply metadata sent from frontend
-                reply_to = data.get("reply_to")
-                quoted_text = data.get("quoted_text")
-                mentions = data.get("mentions")
-                if content:
-                    await session.handle_user_message(content, reply_to=reply_to, quoted_text=quoted_text, mentions=mentions)
-
-    # Handle clean disconnects
-    except WebSocketDisconnect:
-        print(f"WebSocket disconnected for session {session_id}")
-        # Detach websocket but keep session running so client can reconnect
-        if session:
-            session.detach_websocket()
-        active_websocket = None
-    
-    # Handle unexpected errors
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-        # On unexpected errors, detach websocket and leave session to be inspected
-        if session:
-            session.detach_websocket()
-        active_websocket = None
-        
-
-#ENDPOINT 3: Health check
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
     return {"status": "ok"}
 
 
+@app.get("/")
+async def root():
+    return {
+        "message": "WP5 Chatroom Backend",
+        "version": "0.3.0",
+        "endpoints": {
+            "POST /session/start": "Start a new session",
+            "WS /ws/{session_id}": "WebSocket for chat communication",
+            "GET /session/{session_id}/report": "Generate HTML session report",
+            "GET /health": "Health check",
+        },
+    }
+
+
+# ── WebSocket endpoint ────────────────────────────────────────────────────────
+
+@app.websocket("/ws/{session_id}")
+async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    """Real-time chat WebSocket.
+
+    Handles both new connections and reconnects (same or different worker).
+    Messages from the agent pipeline arrive via Redis pub/sub (see
+    SimulationSession._pubsub_loop) and are forwarded to the WebSocket.
+    """
+    await websocket.accept()
+
+    async def send_to_frontend(message_dict: dict):
+        await websocket.send_json(message_dict)
+
+    # Existing session check — handles reconnects (same worker).
+    session = await session_manager.get_or_reconstruct(session_id, send_to_frontend)
+
+    if session:
+        # Reconnect: attach new WebSocket (replays history + subscribes pub/sub).
+        await session.attach_websocket(send_to_frontend)
+    else:
+        # New connection: pop pending metadata and create session.
+        pending = await session_manager.pop_pending(session_id)
+        treatment_group = pending.get("treatment_group")
+
+        if not treatment_group:
+            await websocket.close(code=1008)
+            print(f"WebSocket rejected for {session_id}: missing treatment_group")
+            return
+
+        user_name = pending.get("user_name", "participant")
+        experiment_id = pending.get("experiment_id")
+        if not experiment_id:
+            await websocket.close(code=1008)
+            print(f"WebSocket rejected for {session_id}: missing experiment_id")
+            return
+
+        try:
+            session = await session_manager.create_session(
+                session_id,
+                send_to_frontend,
+                treatment_group=treatment_group,
+                user_name=user_name,
+                experiment_id=experiment_id,
+            )
+        except RuntimeError as e:
+            print(f"WebSocket session creation failed for {session_id}: {e}")
+            await websocket.close(code=1011)
+            return
+        # Attach so the pub/sub loop starts delivering messages to this WebSocket.
+        await session.attach_websocket(send_to_frontend)
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            if data.get("type") == "user_message":
+                content = data.get("content", "").strip()
+                if content:
+                    await session.handle_user_message(
+                        content,
+                        reply_to=data.get("reply_to"),
+                        quoted_text=data.get("quoted_text"),
+                        mentions=data.get("mentions"),
+                    )
+
+    except WebSocketDisconnect:
+        print(f"WebSocket disconnected for session {session_id}")
+        if session:
+            session.detach_websocket()
+
+    except Exception as e:
+        print(f"WebSocket error for session {session_id}: {e}")
+        if session:
+            session.detach_websocket()
+
+
+# ── Like / report endpoints ───────────────────────────────────────────────────
+
 @app.post("/session/{session_id}/message/{message_id}/like")
 async def like_message(session_id: str, message_id: str, payload: LikeRequest):
-    """Toggle/add/remove a like for a message in a session.
-
-    Payload contains a `user` identifier (simple prototype value, e.g. 'user')
-    and an `action` which may be 'toggle' (default), 'like' or 'unlike'.
-    The endpoint returns the updated message representation and broadcasts
-    a `message_like` event over the session websocket so other clients can
-    update in real time.
-    """
-    # Locate session
+    """Toggle a like on a message and persist the change."""
     session = await session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Find message in session state
-    message = None
-    for m in session.state.messages:
-        if m.message_id == message_id:
-            message = m
-            break
-
+    message = next((m for m in session.state.messages if m.message_id == message_id), None)
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    # Toggle-only API (simpler prototype contract)
     user_id = payload.user
-    result = message.toggle_like(user_id)  # returns 'liked' or 'unliked'
+    result = message.toggle_like(user_id)
 
-    # Log the like event
+    # Persist likes update to DB.
     try:
-        session.logger.log_event("message_like", {
-            "message_id": message_id,
-            "user": user_id,
-            "action": result,
-            "likes_count": message.likes_count,
-        })
-    except Exception:
-        # logging failures shouldn't block the API
-        pass
+        pool = _get_pool()
+        await message_repo.update_message_likes(pool, message_id, list(message.liked_by))
+    except Exception as exc:
+        session.logger.log_error("persist_like", str(exc))
 
-    # Broadcast to connected websocket (best-effort)
+    # Log event (fire-and-forget).
+    session.logger.log_event("message_like", {
+        "message_id": message_id,
+        "user": user_id,
+        "action": result,
+        "likes_count": message.likes_count,
+    })
+
+    # Broadcast via Redis pub/sub.
     event = {
         "event_type": "message_like",
         "session_id": session_id,
@@ -266,128 +307,796 @@ async def like_message(session_id: str, message_id: str, payload: LikeRequest):
         "likes_count": message.likes_count,
         "liked_by": list(message.liked_by),
         "user": user_id,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     try:
-        await session.websocket_send(event)
-    except Exception:
-        # If broadcasting fails, continue — clients will reconcile on subsequent state
-        pass
+        r = redis_client.get_redis()
+        await redis_client.publish_event(r, session_id, event)
+    except Exception as exc:
+        session.logger.log_error("publish_like", str(exc))
 
     return {"message": message.to_dict()}
 
 
 @app.post("/session/{session_id}/message/{message_id}/report")
 async def report_message(session_id: str, message_id: str, payload: ReportRequest):
-    """Report a message and optionally block the sender for this session's user.
-
-    Because sessions are single-user, we represent reports as a boolean flag on
-    the message and store blocked agent names in the session state.
-    """
+    """Report a message and optionally block the sender."""
     session = await session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Find message
-    message = None
-    for m in session.state.messages:
-        if m.message_id == message_id:
-            message = m
-            break
-
+    message = next((m for m in session.state.messages if m.message_id == message_id), None)
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
     user_id = payload.user
-    block = bool(payload.block)
+    result = message.toggle_report()
 
-    # Toggle reported flag on the message
-    result = message.toggle_report()  # 'reported' or 'unreported'
+    # Persist reported flag.
+    try:
+        pool = _get_pool()
+        await message_repo.update_message_reported(pool, message_id, message.reported)
+    except Exception as exc:
+        session.logger.log_error("persist_report", str(exc))
 
-    # If requested, block the sender (agent) for this session
     blocked = None
     target_sender = message.sender
-    if block and target_sender:
-        # Only block agent senders (skip blocking if the sender is the human)
-        if target_sender != session.state.user_name:
-            when_iso = datetime.now().isoformat()
-            session.state.block_agent(target_sender, when_iso)
-            # Log the explicit user_block event so block actions appear as top-level events
-            try:
-                session.logger.log_event("user_block", {
-                    "agent_name": target_sender,
-                    "blocked_at": when_iso,
-                    "by": user_id,
-                })
-            except Exception:
-                pass
-            # Return the mapping of blocked agents -> ISO time so clients can apply
-            # selective suppression of future messages.
-            blocked = dict(session.state.blocked_agents)
+    if payload.block and target_sender and target_sender != session.state.user_name:
+        when_iso = datetime.now(timezone.utc).isoformat()
+        session.state.block_agent(target_sender, when_iso)
 
-    # Log the report event
-    try:
-        session.logger.log_event("message_report", {
-            "message_id": message_id,
-            "user": user_id,
-            "action": result,
-            "blocked": blocked,
-            "reason": payload.reason,
+        # Persist block to DB.
+        try:
+            pool = _get_pool()
+            await session_repo.upsert_agent_block(
+                pool,
+                session_id=session_id,
+                agent_name=target_sender,
+                blocked_at=datetime.now(timezone.utc),
+                blocked_by=user_id,
+            )
+        except Exception as exc:
+            session.logger.log_error("persist_agent_block", str(exc))
+
+        session.logger.log_event("user_block", {
+            "agent_name": target_sender,
+            "blocked_at": when_iso,
+            "by": user_id,
         })
-    except Exception:
-        pass
+        blocked = dict(session.state.blocked_agents)
 
-    # Broadcast report and block events to the websocket (best-effort)
+    session.logger.log_event("message_report", {
+        "message_id": message_id,
+        "user": user_id,
+        "action": result,
+        "blocked": blocked,
+        "reason": payload.reason,
+    })
+
+    # Broadcast via pub/sub.
     try:
-        await session.websocket_send({
+        r = redis_client.get_redis()
+        await redis_client.publish_event(r, session_id, {
             "event_type": "message_report",
             "session_id": session_id,
             "message_id": message_id,
             "action": result,
             "user": user_id,
             "reported": message.reported,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
         if blocked is not None:
-            await session.websocket_send({
+            await redis_client.publish_event(r, session_id, {
                 "event_type": "user_block",
                 "session_id": session_id,
                 "user": user_id,
                 "blocked": blocked,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             })
-    except Exception:
-        pass
+    except Exception as exc:
+        session.logger.log_error("publish_report", str(exc))
 
     return {"message": message.to_dict(), "blocked": blocked}
 
 
-#ROOT ENDPOINT: API docstring
-@app.get("/")
-async def root():
-    """Root endpoint with API info."""
+# ── HTML report endpoint ──────────────────────────────────────────────────────
+
+@app.get("/session/{session_id}/report", response_class=HTMLResponse)
+async def session_report(session_id: str):
+    """Generate and return an HTML session report from the DB."""
+    pool = _get_pool()
+
+    row = await session_repo.get_session(pool, session_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    messages = await message_repo.get_session_messages(pool, session_id)
+    events = await event_repo.get_session_events(pool, session_id)
+
+    lines = []
+
+    for evt in events:
+        # Skip "message" events — messages are loaded separately from the messages table
+        if evt["event_type"] == "message":
+            continue
+        lines.append({
+            "timestamp": evt["occurred_at"],
+            "event_type": evt["event_type"],
+            "session_id": session_id,
+            "data": evt["data"],
+        })
+
+    for msg in messages:
+        lines.append({
+            "timestamp": msg["timestamp"],
+            "event_type": "message",
+            "session_id": session_id,
+            "data": msg,
+        })
+
+    lines.sort(key=lambda x: x["timestamp"])
+
+    buf = io.StringIO()
+    for line in lines:
+        buf.write(json.dumps(line) + "\n")
+    buf.seek(0)
+
+    html = generate_html_from_lines(buf, session_id)
+    return HTMLResponse(content=html)
+
+
+# ── Admin endpoints (guarded by ADMIN_PASSPHRASE env var) ────────────────────
+
+def _require_admin(x_admin_key: str = Header(None)):
+    """Raise 401 if the admin passphrase is wrong."""
+    if x_admin_key != ADMIN_PASSPHRASE:
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+
+
+def _generate_token() -> str:
+    """Generate a cryptographically random token in format xK9m-Rw2p."""
+    alphabet = string.ascii_letters + string.digits
+    left = "".join(secrets.choice(alphabet) for _ in range(4))
+    right = "".join(secrets.choice(alphabet) for _ in range(4))
+    return f"{left}-{right}"
+
+
+class TokenGenerateRequest(BaseModel):
+    participants_per_group: int
+    groups: List[str]
+
+
+@app.get("/admin/verify")
+async def admin_verify(x_admin_key: str = Header(None)):
+    """Verify admin passphrase."""
+    _require_admin(x_admin_key)
+    return {"status": "ok"}
+
+
+@app.get("/admin/meta")
+async def admin_get_meta(x_admin_key: str = Header(None)):
+    """Return platform metadata for the admin wizard (available features, LLM providers)."""
+    _require_admin(x_admin_key)
+    from utils.llm.provider import PROVIDER_REGISTRY, PROVIDER_PARAMS
+
     return {
-        "message": "WP5 Chatroom Backend",
-        "version": "0.1.0",
-        "endpoints": {
-            "POST /session/start": "Start a new session",
-            "WS /ws/{session_id}": "WebSocket for chat communication",
-            "GET /health": "Health check"
-        }
+        "available_features": [
+            {"id": fid, **FEATURES_META.get(fid, {"label": fid, "description": ""})}
+            for fid in AVAILABLE_FEATURES
+        ],
+        "llm_providers": list(PROVIDER_REGISTRY.keys()),
+        "provider_models": PROVIDER_REGISTRY,
+        "provider_params": PROVIDER_PARAMS,
     }
 
-# Run with: uvicorn backend.main:app --reload on port 8000
+
+class TestLLMRequest(BaseModel):
+    provider: str
+    model: str
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    max_tokens: int = 64
+
+
+@app.post("/admin/test-llm")
+async def admin_test_llm(body: TestLLMRequest, x_admin_key: str = Header(None)):
+    """Send a short test prompt to an LLM provider and return the raw call details.
+
+    This lets the admin verify credentials, model availability, and parameter
+    support before committing to a config.
+    """
+    _require_admin(x_admin_key)
+    from utils.llm.llm_manager import _create_client
+    from utils.llm.provider import PROVIDER_PARAMS
+
+    provider = body.provider.lower()
+    params_meta = PROVIDER_PARAMS.get(provider, {})
+    warnings: List[str] = []
+
+    # Detect mutual-exclusion violations and report them.
+    effective_temperature = body.temperature
+    effective_top_p = body.top_p
+    mutex = params_meta.get("mutual_exclusion")
+    if mutex and body.temperature is not None and body.top_p is not None:
+        warnings.append(
+            f"{provider} does not allow both temperature and top_p — "
+            f"top_p will be ignored (temperature takes priority)."
+        )
+        effective_top_p = None
+
+    # Build the call summary the user will see.
+    call_params = {
+        "provider": provider,
+        "model": body.model,
+        "temperature": effective_temperature,
+        "top_p": effective_top_p,
+        "max_tokens": body.max_tokens,
+    }
+
+    test_prompt = "Reply with exactly one sentence: The quick brown fox"
+
+    try:
+        client = _create_client(
+            provider,
+            model=body.model,
+            temperature=effective_temperature,
+            top_p=effective_top_p,
+            max_tokens=body.max_tokens,
+        )
+    except Exception as e:
+        return {
+            "ok": False,
+            "call_params": call_params,
+            "prompt": test_prompt,
+            "error": f"Client creation failed: {e}",
+            "warnings": warnings,
+        }
+
+    try:
+        response_text = await client.generate_response_async(
+            test_prompt, max_retries=0
+        )
+    except Exception as e:
+        response_text = None
+        error_msg = str(e)
+    else:
+        error_msg = None if response_text else "No response returned (model may be unavailable)"
+    finally:
+        # Clean up client resources.
+        if hasattr(client, "aclose"):
+            try:
+                await client.aclose()
+            except Exception:
+                pass
+
+    # Truncate long responses for display.
+    truncated = response_text[:300] + "…" if response_text and len(response_text) > 300 else response_text
+
+    return {
+        "ok": response_text is not None,
+        "call_params": call_params,
+        "prompt": test_prompt,
+        "response": truncated,
+        "error": error_msg,
+        "warnings": warnings,
+    }
+
+
+@app.get("/admin/config/{experiment_id}")
+async def admin_get_config(experiment_id: str, x_admin_key: str = Header(None)):
+    """Return the saved config for an experiment from the DB."""
+    _require_admin(x_admin_key)
+    pool = _get_pool()
+    experiment = await config_repo.get_experiment(pool, experiment_id)
+    if not experiment:
+        raise HTTPException(status_code=404, detail=f"Experiment '{experiment_id}' not found")
+    return experiment
+
+
+@app.post("/admin/config")
+async def admin_save_config(body: dict, x_admin_key: str = Header(None)):
+    """Validate and save experiment config to the DB (immutable).
+
+    Once saved, the configuration cannot be changed. A new experiment
+    must be created for different settings.
+    """
+    _require_admin(x_admin_key)
+    global _experiment_id
+
+    new_experiment_id = (body.get("experiment_id") or "").strip()
+    if not new_experiment_id:
+        raise HTTPException(
+            status_code=422,
+            detail="experiment_id is required.",
+        )
+
+    description = (body.get("description") or "").strip()
+
+    # Validate simulation config.
+    sim = body.get("simulation")
+    if not sim:
+        raise HTTPException(status_code=422, detail="simulation config is required")
+    try:
+        sim = config_repo.validate_simulation_config(sim)
+    except (ValueError, TypeError, KeyError) as e:
+        raise HTTPException(status_code=422, detail=f"Simulation config error: {e}")
+
+    # Validate experimental config.
+    exp = body.get("experimental")
+    if not exp:
+        raise HTTPException(status_code=422, detail="experimental config is required")
+    try:
+        exp = config_repo.validate_experimental_config(exp, AVAILABLE_FEATURES)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Experimental config error: {e}")
+
+    # Validate tokens.
+    token_groups = (body.get("tokens") or {}).get("groups", {})
+    try:
+        config_repo.validate_token_groups(token_groups, exp.get("groups", {}))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Token error: {e}")
+
+    # Parse schedule dates.
+    starts_at = None
+    ends_at = None
+    raw_starts = body.get("starts_at")
+    raw_ends = body.get("ends_at")
+    if raw_starts:
+        try:
+            starts_at = datetime.fromisoformat(raw_starts.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=422, detail="Invalid starts_at datetime")
+    if raw_ends:
+        try:
+            ends_at = datetime.fromisoformat(raw_ends.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=422, detail="Invalid ends_at datetime")
+    if starts_at and ends_at and ends_at <= starts_at:
+        raise HTTPException(status_code=422, detail="ends_at must be after starts_at")
+
+    # Save config to DB (immutable — rejects duplicates).
+    pool = _get_pool()
+    config_blob = {"simulation": sim, "experimental": exp}
+    try:
+        await config_repo.save_experiment_config(
+            pool, new_experiment_id, config_blob, description,
+            starts_at=starts_at, ends_at=ends_at,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    # Seed tokens into the DB for this experiment.
+    await token_manager.seed_tokens(pool, new_experiment_id, token_groups)
+
+    # Activate this experiment.
+    _experiment_id = new_experiment_id
+
+    return {"status": "saved", "experiment_id": new_experiment_id}
+
+
+@app.post("/admin/experiment/{experiment_id}/activate")
+async def admin_activate_experiment(experiment_id: str, x_admin_key: str = Header(None)):
+    """Set the active experiment (for dashboard context and session routing)."""
+    _require_admin(x_admin_key)
+    global _experiment_id
+
+    pool = _get_pool()
+    exists = await config_repo.get_experiment_config(pool, experiment_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail=f"Experiment '{experiment_id}' not found")
+
+    _experiment_id = experiment_id
+    return {"status": "activated", "experiment_id": experiment_id}
+
+
+@app.post("/admin/experiment/{experiment_id}/pause")
+async def admin_pause_experiment(experiment_id: str, x_admin_key: str = Header(None)):
+    """Pause an experiment so no new sessions can be started."""
+    _require_admin(x_admin_key)
+    pool = _get_pool()
+    try:
+        await config_repo.set_paused(pool, experiment_id, True)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"status": "paused", "experiment_id": experiment_id}
+
+
+@app.post("/admin/experiment/{experiment_id}/resume")
+async def admin_resume_experiment(experiment_id: str, x_admin_key: str = Header(None)):
+    """Resume a paused experiment."""
+    _require_admin(x_admin_key)
+    pool = _get_pool()
+    try:
+        await config_repo.set_paused(pool, experiment_id, False)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"status": "resumed", "experiment_id": experiment_id}
+
+
+@app.post("/admin/tokens/generate")
+async def admin_generate_tokens(body: TokenGenerateRequest, x_admin_key: str = Header(None)):
+    """Generate cryptographically random tokens for each treatment group."""
+    _require_admin(x_admin_key)
+
+    if body.participants_per_group <= 0:
+        raise HTTPException(status_code=422, detail="participants_per_group must be > 0")
+    if not body.groups:
+        raise HTTPException(status_code=422, detail="At least one group is required")
+
+    seen: set = set()
+    result: Dict[str, List[str]] = {}
+    for group in body.groups:
+        tokens = []
+        for _ in range(body.participants_per_group):
+            while True:
+                t = _generate_token()
+                if t not in seen:
+                    seen.add(t)
+                    tokens.append(t)
+                    break
+        result[group] = tokens
+
+    total = sum(len(v) for v in result.values())
+    return {"tokens": result, "total": total}
+
+
+@app.get("/admin/experiments")
+async def admin_list_experiments(x_admin_key: str = Header(None)):
+    """Return experiment IDs in the database with summary counts."""
+    _require_admin(x_admin_key)
+    pool = _get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT
+                e.experiment_id,
+                e.description,
+                e.created_at,
+                e.starts_at,
+                e.ends_at,
+                e.paused,
+                COALESCE(s.session_count, 0)  AS sessions,
+                COALESCE(m.message_count, 0)  AS messages,
+                COALESCE(t.token_count, 0)    AS tokens,
+                COALESCE(t.used_count, 0)     AS tokens_used
+            FROM experiments e
+            LEFT JOIN (
+                SELECT experiment_id, COUNT(*) AS session_count
+                FROM sessions GROUP BY experiment_id
+            ) s USING (experiment_id)
+            LEFT JOIN (
+                SELECT experiment_id, COUNT(*) AS message_count
+                FROM messages GROUP BY experiment_id
+            ) m USING (experiment_id)
+            LEFT JOIN (
+                SELECT experiment_id,
+                       COUNT(*) AS token_count,
+                       COUNT(*) FILTER (WHERE used) AS used_count
+                FROM tokens GROUP BY experiment_id
+            ) t USING (experiment_id)
+            ORDER BY e.created_at DESC
+        """)
+    return {
+        "experiments": [
+            {
+                "experiment_id": r["experiment_id"],
+                "description": r["description"] or "",
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "starts_at": r["starts_at"].isoformat() if r["starts_at"] else None,
+                "ends_at": r["ends_at"].isoformat() if r["ends_at"] else None,
+                "paused": r["paused"] or False,
+                "sessions": r["sessions"],
+                "messages": r["messages"],
+                "tokens": r["tokens"],
+                "tokens_used": r["tokens_used"],
+            }
+            for r in rows
+        ],
+        "active_experiment_id": _experiment_id,
+    }
+
+
+@app.post("/admin/reset-sessions")
+async def admin_reset_sessions(
+    body: Dict[str, Any] = None,
+    x_admin_key: str = Header(None),
+):
+    """Reset all session data for an experiment, keeping config and tokens intact."""
+    _require_admin(x_admin_key)
+    body = body or {}
+    target_id = body.get("experiment_id", "").strip()
+    if not target_id:
+        raise HTTPException(status_code=422, detail="experiment_id is required")
+
+    pool = _get_pool()
+
+    async with pool.acquire() as conn:
+        exists = await conn.fetchval(
+            "SELECT 1 FROM experiments WHERE experiment_id = $1", target_id
+        )
+    if not exists:
+        raise HTTPException(status_code=404, detail=f"Experiment '{target_id}' not found")
+
+    # Stop in-memory sessions that belong to this experiment.
+    for sid in list((await session_manager.list_sessions()).keys()):
+        try:
+            s = await session_manager.get_session(sid)
+            if s and getattr(s, "experiment_id", None) == target_id:
+                await s.stop(reason="admin_reset")
+        except Exception:
+            pass
+
+    # Delete session data but keep experiment config and tokens.
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT session_id FROM sessions WHERE experiment_id = $1",
+            target_id,
+        )
+        session_ids = [r["session_id"] for r in rows]
+
+        await conn.execute(
+            "DELETE FROM events WHERE session_id IN "
+            "(SELECT session_id FROM sessions WHERE experiment_id = $1)",
+            target_id,
+        )
+        await conn.execute(
+            "DELETE FROM messages WHERE session_id IN "
+            "(SELECT session_id FROM sessions WHERE experiment_id = $1)",
+            target_id,
+        )
+        await conn.execute(
+            "DELETE FROM agent_blocks WHERE session_id IN "
+            "(SELECT session_id FROM sessions WHERE experiment_id = $1)",
+            target_id,
+        )
+        await conn.execute(
+            "DELETE FROM sessions WHERE experiment_id = $1",
+            target_id,
+        )
+        # Reset token consumption so tokens can be reused.
+        await conn.execute(
+            "UPDATE tokens SET used = FALSE, used_at = NULL, session_id = NULL WHERE experiment_id = $1",
+            target_id,
+        )
+
+    # Flush Redis session caches.
+    r = redis_client.get_redis()
+    for sid in session_ids:
+        await redis_client.invalidate_session(r, sid)
+
+    return {"status": "sessions_reset", "experiment_id": target_id, "sessions_deleted": len(session_ids)}
+
+
+@app.post("/admin/reset-db")
+async def admin_reset_db(
+    body: Dict[str, Any] = None,
+    x_admin_key: str = Header(None),
+):
+    """Delete an experiment and all its data from the database."""
+    _require_admin(x_admin_key)
+    global _experiment_id
+    body = body or {}
+    target_id = body.get("experiment_id", "").strip()
+    if not target_id:
+        raise HTTPException(status_code=422, detail="experiment_id is required")
+
+    pool = _get_pool()
+
+    # Verify experiment exists.
+    async with pool.acquire() as conn:
+        exists = await conn.fetchval(
+            "SELECT 1 FROM experiments WHERE experiment_id = $1", target_id
+        )
+    if not exists:
+        raise HTTPException(status_code=404, detail=f"Experiment '{target_id}' not found")
+
+    # Stop in-memory sessions that belong to this experiment.
+    for sid in list((await session_manager.list_sessions()).keys()):
+        try:
+            s = await session_manager.get_session(sid)
+            if s and getattr(s, "experiment_id", None) == target_id:
+                await s.stop(reason="admin_reset")
+        except Exception:
+            pass
+
+    # Collect session IDs before deleting so we can flush Redis.
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT session_id FROM sessions WHERE experiment_id = $1",
+            target_id,
+        )
+        session_ids = [r["session_id"] for r in rows]
+
+        await conn.execute(
+            "DELETE FROM events WHERE session_id IN "
+            "(SELECT session_id FROM sessions WHERE experiment_id = $1)",
+            target_id,
+        )
+        await conn.execute(
+            "DELETE FROM messages WHERE session_id IN "
+            "(SELECT session_id FROM sessions WHERE experiment_id = $1)",
+            target_id,
+        )
+        await conn.execute(
+            "DELETE FROM agent_blocks WHERE session_id IN "
+            "(SELECT session_id FROM sessions WHERE experiment_id = $1)",
+            target_id,
+        )
+        await conn.execute(
+            "DELETE FROM sessions WHERE experiment_id = $1",
+            target_id,
+        )
+        await conn.execute(
+            "DELETE FROM tokens WHERE experiment_id = $1",
+            target_id,
+        )
+        await conn.execute(
+            "DELETE FROM experiments WHERE experiment_id = $1",
+            target_id,
+        )
+
+    # Flush Redis session caches so stale metadata doesn't trigger reconstruction.
+    r = redis_client.get_redis()
+    for sid in session_ids:
+        await redis_client.invalidate_session(r, sid)
+
+    # Clear active experiment if it was the deleted one.
+    if _experiment_id == target_id:
+        _experiment_id = ""
+
+    return {"status": "experiment_deleted", "experiment_id": target_id}
+
+
+@app.get("/admin/sessions")
+async def admin_list_sessions(
+    experiment_id: Optional[str] = None,
+    x_admin_key: str = Header(None),
+):
+    """Return all sessions for an experiment with message counts."""
+    _require_admin(x_admin_key)
+    eid = experiment_id or get_experiment_id()
+    pool = _get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT
+                s.session_id,
+                s.treatment_group,
+                s.token,
+                s.status,
+                s.started_at,
+                s.ended_at,
+                s.end_reason,
+                COALESCE(m.msg_count, 0) AS message_count
+            FROM sessions s
+            LEFT JOIN (
+                SELECT session_id, COUNT(*) AS msg_count
+                FROM messages GROUP BY session_id
+            ) m USING (session_id)
+            WHERE s.experiment_id = $1
+            ORDER BY s.started_at DESC NULLS LAST
+        """, eid)
+    return {
+        "sessions": [
+            {
+                "session_id": str(r["session_id"]),
+                "treatment_group": r["treatment_group"],
+                "token": r["token"],
+                "status": r["status"],
+                "started_at": r["started_at"].isoformat() if r["started_at"] else None,
+                "ended_at": r["ended_at"].isoformat() if r["ended_at"] else None,
+                "end_reason": r["end_reason"],
+                "message_count": r["message_count"],
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.get("/admin/events")
+async def admin_list_events(
+    experiment_id: Optional[str] = None,
+    after_id: int = 0,
+    limit: int = 200,
+    x_admin_key: str = Header(None),
+):
+    """Return recent events for an experiment, with cursor-based pagination.
+
+    Pass `after_id` to fetch only events newer than a given event ID.
+    """
+    _require_admin(x_admin_key)
+    eid = experiment_id or get_experiment_id()
+    limit = min(limit, 500)
+    pool = _get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT e.id, e.session_id, e.event_type, e.occurred_at, e.data
+            FROM events e
+            WHERE e.experiment_id = $1 AND e.id > $2
+            ORDER BY e.id ASC
+            LIMIT $3
+            """,
+            eid,
+            after_id,
+            limit,
+        )
+    return {
+        "events": [
+            {
+                "id": r["id"],
+                "session_id": str(r["session_id"]),
+                "event_type": r["event_type"],
+                "occurred_at": r["occurred_at"].isoformat(),
+                "data": r["data"] if isinstance(r["data"], dict) else json.loads(r["data"]),
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.get("/admin/tokens/stats")
+async def admin_token_stats(
+    experiment_id: Optional[str] = None,
+    x_admin_key: str = Header(None),
+):
+    """Return per-group token usage for an experiment."""
+    _require_admin(x_admin_key)
+    eid = experiment_id or get_experiment_id()
+    pool = _get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT
+                treatment_group,
+                COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE used) AS used
+            FROM tokens
+            WHERE experiment_id = $1
+            GROUP BY treatment_group
+            ORDER BY treatment_group
+        """, eid)
+    return {
+        "groups": [
+            {
+                "group": r["treatment_group"],
+                "total": r["total"],
+                "used": r["used"],
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.get("/admin/tokens/csv/{experiment_id}")
+async def admin_tokens_csv(experiment_id: str, x_admin_key: str = Header(None)):
+    """Download all tokens for an experiment as a CSV file."""
+    _require_admin(x_admin_key)
+    pool = _get_pool()
+    from db.repositories import token_repo
+    tokens = await token_repo.list_tokens(pool, experiment_id)
+    if not tokens:
+        raise HTTPException(status_code=404, detail="No tokens found for this experiment")
+
+    import csv
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["token", "treatment_group", "used", "used_at", "session_id"])
+    for t in tokens:
+        writer.writerow([
+            t["token"],
+            t["treatment_group"],
+            t["used"],
+            t["used_at"].isoformat() if t.get("used_at") else "",
+            str(t["session_id"]) if t.get("session_id") else "",
+        ])
+    buf.seek(0)
+    filename = f"{experiment_id}_tokens.csv"
+    return StreamingResponse(
+        buf,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-# Cleanup on shutdown (.on_event deprecated; fix needed later)
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Stop all running sessions so logs are finalised and HTML reports generated."""
-    sessions = await session_manager.list_sessions()
-    for sid, session in sessions.items():
-        try:
-            await session.stop(reason="server_shutdown")
-        except Exception as e:
-            print(f"Error stopping session {sid} during shutdown: {e}")

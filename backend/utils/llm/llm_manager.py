@@ -2,7 +2,7 @@ import asyncio
 from typing import Optional
 
 
-def _create_client(provider: str, model: str = None, temperature: float = None, top_p: float = None):
+def _create_client(provider: str, model: str = None, temperature: float = None, top_p: float = None, max_tokens: int = None):
     """Create an LLM client for the given provider and optional model name.
 
     Imports are done lazily so only the selected provider's package needs to be installed.
@@ -14,6 +14,10 @@ def _create_client(provider: str, model: str = None, temperature: float = None, 
         kwargs["model_name"] = model
     if temperature is not None:
         kwargs["temperature"] = temperature
+    if top_p is not None:
+        kwargs["top_p"] = top_p
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
 
     if provider == "huggingface":
         from .provider.llm_huggingface import HuggingFaceClient
@@ -26,8 +30,6 @@ def _create_client(provider: str, model: str = None, temperature: float = None, 
         return AnthropicClient(**kwargs)
     elif provider == "mistral":
         from .provider.llm_mistral import MistralClient
-        if top_p is not None:
-            kwargs["top_p"] = top_p
         return MistralClient(**kwargs)
     elif provider == "konstanz":
         from .provider.llm_konstanz import KonstanzClient
@@ -48,7 +50,10 @@ def _create_client_from_config(simulation_config: dict):
     """
     provider = simulation_config.get("llm_provider", "gemini")
     model = simulation_config.get("llm_model")
-    return _create_client(provider, model)
+    temperature = simulation_config.get("temperature")
+    top_p = simulation_config.get("top_p")
+    max_tokens = simulation_config.get("max_tokens")
+    return _create_client(provider, model, temperature=temperature, top_p=top_p, max_tokens=max_tokens)
 
 
 class LLMManager:
@@ -87,8 +92,9 @@ class LLMManager:
                 model = simulation_config.get(f"{role}_llm_model")
                 temperature = simulation_config.get(f"{role}_temperature")
                 top_p = simulation_config.get(f"{role}_top_p")
+                max_tokens = simulation_config.get(f"{role}_max_tokens")
                 if provider:
-                    client = _create_client(provider, model, temperature=temperature, top_p=top_p)
+                    client = _create_client(provider, model, temperature=temperature, top_p=top_p, max_tokens=max_tokens)
             if client is None:
                 client = _create_client_from_config(simulation_config)
         return cls(simulation_config["llm_concurrency_limit"], client=client)
@@ -107,11 +113,10 @@ class LLMManager:
             except AttributeError:
                 # Fallback: maybe client only exposes sync API
                 # run the sync call in a threadpool
-                import asyncio as _asyncio
-
-                loop = _asyncio.get_running_loop()
+                loop = asyncio.get_running_loop()
                 return await loop.run_in_executor(None, lambda: self.client.generate_response(prompt, max_retries=max_retries, system_prompt=system_prompt))
-            except Exception:
+            except Exception as e:
+                print(f"[LLMManager] generate_response failed: {type(e).__name__}: {e}")
                 return None
 
 

@@ -1,53 +1,86 @@
 @import "tailwindcss";
 
 @theme {
-  --color-chat-bg: #efeae2;
-  --color-header: #00897b;
-  --color-header-dark: #00695c;
-  --color-bubble-out: #d9fdd3;
-  --color-bubble-in: #ffffff;
-  --color-primary: #111b21;
-  --color-secondary: #667781;
-  --color-input-bar: #f0f2f5;
-  --color-send-btn: #00a884;
-  --color-send-btn-hover: #008f6f;
-  --color-quote: #06cf9c;
-  --color-danger: #ea0038;
-  --color-date-pill: rgba(255, 255, 255, 0.9);
-  --color-date-pill-text: #54656f;
-  --color-link-preview-bg: #d1f4cc;
-  --color-mention: #0366d6;
+  /* Neutrals (slate-based) */
+  --color-bg-page: #f1f5f9;
+  --color-bg-surface: #ffffff;
+  --color-bg-feed: #f8fafc;
+  --color-bg-input: #f1f5f9;
+  --color-border: #e2e8f0;
+
+  /* Text */
+  --color-primary: #1e293b;
+  --color-secondary: #64748b;
+  --color-tertiary: #94a3b8;
+
+  /* Accent (indigo) */
+  --color-accent: #6366f1;
+  --color-accent-hover: #4f46e5;
+  --color-accent-soft: #e0e7ff;
+
+  /* Functional */
+  --color-like: #f472b6;
+  --color-like-soft: #fce7f3;
+  --color-danger: #ef4444;
+  --color-success: #22c55e;
+  --color-mention: #6366f1;
+
+  /* Date pill */
+  --color-date-pill: #e2e8f0;
+  --color-date-pill-text: #475569;
+
+  /* Quote bar */
+  --color-quote: #a78bfa;
+
+  /* ── Admin theme tokens (light defaults) ──────────────────────────────── */
+  --color-admin-bg: #f1f5f9;
+  --color-admin-surface: #ffffff;
+  --color-admin-raised: #f8fafc;
+  --color-admin-border: #e2e8f0;
+  --color-admin-text: #1e293b;
+  --color-admin-muted: #64748b;
+  --color-admin-faint: #94a3b8;
+  --color-admin-accent: #6366f1;
+  --color-admin-accent-hover: #4f46e5;
+  --color-admin-accent-soft: #e0e7ff;
+  --color-admin-accent-muted: #c7d2fe;
+  --color-admin-pastel-green: #d1fae5;
+  --color-admin-pastel-green-text: #065f46;
+  --color-admin-pastel-pink: #fce7f3;
+  --color-admin-pastel-pink-text: #9d174d;
+  --color-admin-pastel-amber: #fef3c7;
+  --color-admin-pastel-amber-text: #92400e;
+  --color-admin-pastel-purple: #ede9fe;
+  --color-admin-pastel-purple-text: #5b21b6;
+  --color-admin-danger-soft: #fee2e2;
+  --color-admin-danger-border: #fecaca;
+  --color-admin-danger-text: #991b1b;
 }
 
-/* Bubble tails — only shown on first message in a group */
-.bubble-tail-right {
-  position: relative;
-}
-.bubble-tail-right::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: -8px;
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 0 0 10px 8px;
-  border-color: transparent transparent transparent var(--color-bubble-out);
-}
-
-.bubble-tail-left {
-  position: relative;
-}
-.bubble-tail-left::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -8px;
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 0 8px 10px 0;
-  border-color: transparent var(--color-bubble-in) transparent transparent;
+/* ── Admin dark mode overrides ──────────────────────────────────────────── */
+[data-admin-theme="dark"] {
+  --color-admin-bg: #0f172a;
+  --color-admin-surface: #1e293b;
+  --color-admin-raised: #334155;
+  --color-admin-border: #334155;
+  --color-admin-text: #f1f5f9;
+  --color-admin-muted: #94a3b8;
+  --color-admin-faint: #64748b;
+  --color-admin-accent: #818cf8;
+  --color-admin-accent-hover: #6366f1;
+  --color-admin-accent-soft: rgba(99, 102, 241, 0.15);
+  --color-admin-accent-muted: rgba(99, 102, 241, 0.25);
+  --color-admin-pastel-green: rgba(16, 185, 129, 0.15);
+  --color-admin-pastel-green-text: #6ee7b7;
+  --color-admin-pastel-pink: rgba(244, 114, 182, 0.15);
+  --color-admin-pastel-pink-text: #f9a8d4;
+  --color-admin-pastel-amber: rgba(245, 158, 11, 0.15);
+  --color-admin-pastel-amber-text: #fbbf24;
+  --color-admin-pastel-purple: rgba(139, 92, 246, 0.15);
+  --color-admin-pastel-purple-text: #c4b5fd;
+  --color-admin-danger-soft: rgba(239, 68, 68, 0.15);
+  --color-admin-danger-border: rgba(239, 68, 68, 0.3);
+  --color-admin-danger-text: #fca5a5;
 }
 
 /* Chat feed scrollbar */
@@ -58,30 +91,20 @@
   background: transparent;
 }
 .chat-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.12);
   border-radius: 3px;
 }
 .chat-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.22);
 }
 
-/* Wallpaper pattern — subtle diagonal lines */
-.chat-wallpaper {
-  background-color: var(--color-chat-bg);
-  background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23c8c3ba' fill-opacity='0.15'%3E%3Cpath d='M20 0L0 20h4L20 4l16 16h4z'/%3E%3Cpath d='M20 40L0 20h4l16 16 16-16h4z'/%3E%3C/g%3E%3C/svg%3E");
-}
+/* Message action buttons — always visible */
 
-/* Context menu animation */
-@keyframes menu-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+/* Subtle entrance animation for messages */
+@keyframes msg-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.context-menu-enter {
-  animation: menu-in 0.12s ease-out;
+.msg-enter {
+  animation: msg-enter 0.2s ease-out;
 }

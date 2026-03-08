@@ -11,9 +11,11 @@ load_dotenv()
 class AnthropicClient:
     """Client for interacting with the Anthropic API (sync + async)."""
 
-    def __init__(self, model_name: str = "claude-sonnet-4-5", temperature: float = None):
+    def __init__(self, model_name: str = "claude-sonnet-4-6", temperature: float = None, top_p: float = None, max_tokens: int = 1024):
         self.model_name = model_name
         self.temperature = temperature
+        self.top_p = top_p
+        self.max_tokens = max_tokens
         api_key = os.getenv("ANTHROPIC_API_KEY")
 
         # Create sync client
@@ -34,7 +36,7 @@ class AnthropicClient:
             try:
                 kwargs = dict(
                     model=self.model_name,
-                    max_tokens=1024,
+                    max_tokens=self.max_tokens,
                     messages=[
                         {"role": "user", "content": prompt}
                     ],
@@ -43,6 +45,8 @@ class AnthropicClient:
                     kwargs["system"] = system_prompt
                 if self.temperature is not None:
                     kwargs["temperature"] = self.temperature
+                elif self.top_p is not None:
+                    kwargs["top_p"] = self.top_p
                 message = self.client.messages.create(**kwargs)
                 return message.content[0].text
 
@@ -66,7 +70,7 @@ class AnthropicClient:
                 if self.aclient is not None:
                     kwargs = dict(
                         model=self.model_name,
-                        max_tokens=1024,
+                        max_tokens=self.max_tokens,
                         messages=[
                             {"role": "user", "content": prompt}
                         ],
@@ -75,6 +79,8 @@ class AnthropicClient:
                         kwargs["system"] = system_prompt
                     if self.temperature is not None:
                         kwargs["temperature"] = self.temperature
+                    elif self.top_p is not None:
+                        kwargs["top_p"] = self.top_p
                     message = await self.aclient.messages.create(**kwargs)
                     return message.content[0].text
                 else:

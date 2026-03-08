@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 
 interface LoginScreenProps {
   initialUsername: string
@@ -16,7 +16,7 @@ export default function LoginScreen({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (!token.trim()) {
       setError("Please enter a token")
       return
@@ -29,7 +29,7 @@ export default function LoginScreen({
       setError("Invalid token. Please try again.")
       setLoading(false)
     }
-  }
+  }, [token, username, onStart])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -39,23 +39,38 @@ export default function LoginScreen({
   }
 
   return (
-    <div className="flex items-center justify-center h-dvh bg-gray-100">
-      {/* Header accent */}
-      <div className="fixed top-0 left-0 right-0 h-32 bg-header" />
-
-      <div className="relative z-10 bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 overflow-hidden">
+    <div className="flex items-center justify-center h-dvh bg-bg-page">
+      <div className="bg-bg-surface rounded-xl shadow-lg w-full max-w-sm mx-4 overflow-hidden border border-border">
         {/* Card header */}
-        <div className="bg-header px-6 py-5">
-          <h1 className="text-white text-xl font-medium m-0">
-            Community Chatroom
+        <div className="px-6 pt-6 pb-4 text-center">
+          <div className="w-12 h-12 rounded-xl bg-accent-soft mx-auto mb-3 flex items-center justify-center">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="text-accent"
+              aria-hidden="true"
+            >
+              <path
+                d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <h1 className="text-xl font-semibold text-primary m-0">
+            Discussion Room
           </h1>
-          <p className="text-white/70 text-sm mt-1">
-            Enter your token to join
+          <p className="text-sm text-secondary mt-1">
+            Enter your token to join the discussion
           </p>
         </div>
 
         {/* Form */}
-        <div className="px-6 py-5 space-y-3">
+        <div className="px-6 pb-6 space-y-3">
           <div>
             <label
               htmlFor="username"
@@ -70,7 +85,7 @@ export default function LoginScreen({
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="e.g. Alice"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-primary focus:outline-none focus:border-header focus:ring-1 focus:ring-header/30 transition-colors placeholder:text-secondary/50"
+              className="w-full px-3 py-2.5 border border-border rounded-lg text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-colors placeholder:text-tertiary bg-bg-surface"
             />
           </div>
           <div>
@@ -90,21 +105,19 @@ export default function LoginScreen({
               }}
               onKeyDown={handleKeyDown}
               placeholder="e.g. user0002"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-primary focus:outline-none focus:border-header focus:ring-1 focus:ring-header/30 transition-colors placeholder:text-secondary/50"
+              className="w-full px-3 py-2.5 border border-border rounded-lg text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-colors placeholder:text-tertiary bg-bg-surface"
               autoFocus
             />
           </div>
 
-          {error && (
-            <p className="text-sm text-danger mt-1">{error}</p>
-          )}
+          {error && <p className="text-sm text-danger mt-1">{error}</p>}
 
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="w-full py-2.5 bg-header hover:bg-header-dark text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 mt-2"
+            className="w-full py-2.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 mt-2"
           >
-            {loading ? "Joining..." : "Join Chatroom"}
+            {loading ? "Joining..." : "Join Discussion"}
           </button>
         </div>
       </div>

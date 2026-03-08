@@ -20,7 +20,7 @@ export default function ChatApp() {
     <ChatRoom
       visibleMessages={chat.visibleMessages}
       participants={chat.participants}
-      currentUser={chat.currentUser}
+      displayName={chat.username}
       isConnected={chat.isConnected}
       inputValue={chat.inputValue}
       setInputValue={chat.setInputValue}
@@ -34,9 +34,7 @@ export default function ChatApp() {
       setReportTarget={chat.setReportTarget}
       reporting={chat.reporting}
       performReport={chat.performReport}
-      contextMenu={chat.contextMenu}
-      setContextMenu={chat.setContextMenu}
-      username={chat.username}
+      typingCount={chat.typingCount}
     />
   )
 }

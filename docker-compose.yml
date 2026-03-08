@@ -1,0 +1,73 @@
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wp5
+      POSTGRES_USER: wp5user
+      POSTGRES_PASSWORD: wp5pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wp5user -d wp5"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BACKEND_BASE: ${NEXT_PUBLIC_BACKEND_BASE:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      TEST_DATABASE_URL: postgresql://wp5user:wp5pass@db:5432/wp5
+      REDIS_URL: redis://redis:6379/1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    entrypoint: python -m pytest tests/ -v
+    profiles: [test]
+
+volumes:
+  postgres_data:
+  redis_data:

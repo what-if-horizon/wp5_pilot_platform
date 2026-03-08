@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from typing import Optional, List, Set
 
@@ -9,7 +9,7 @@ from typing import Optional, List, Set
 class Message:
     """Represents a single message in the chatroom."""
     
-    sender: str  # "user" or agent name (e.g., "Alice")
+    sender: str  # "participant" or agent name (e.g., "Alice")
     content: str 
     timestamp: datetime
     message_id: str
@@ -41,7 +41,7 @@ class Message:
         return cls(
             sender=sender,
             content=content,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             message_id=str(uuid.uuid4()),
             reply_to=reply_to,
             quoted_text=quoted_text,
