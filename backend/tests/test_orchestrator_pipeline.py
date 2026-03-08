@@ -89,15 +89,20 @@ def _director_json(
     target_user=None,
     target_message_id=None,
 ):
-    """Build a valid Director JSON response (uses real names — Orchestrator maps them)."""
-    # We need to use the *anonymized* name since that's what the Director "sees"
+    """Build a valid Director JSON response.
+
+    Note: next_agent/target_user should use anonymized names (Member N)
+    since the Director operates in the anonymized space.
+    performer_instruction is required for non-like actions by parse_director_response.
+    """
     data = {
         "next_agent": next_agent,
         "action_type": action_type,
         "reasoning": reasoning,
     }
-    if performer_instruction:
-        data["performer_instruction"] = performer_instruction
+    # performer_instruction is required for non-like actions
+    if action_type != "like":
+        data["performer_instruction"] = performer_instruction or {"tone": "neutral", "goal": "engage"}
     if target_user:
         data["target_user"] = target_user
     if target_message_id:

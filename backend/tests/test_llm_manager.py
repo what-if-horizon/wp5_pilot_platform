@@ -218,14 +218,8 @@ class TestCreateClient:
             _create_client("nonexistent_provider")
 
     def test_default_provider_is_gemini(self):
-        """None provider defaults to gemini."""
-        with patch("utils.llm.llm_manager._create_client") as mock:
-            # Call the real function but let it fail on import — we just
-            # want to verify the provider routing, not actual client creation
-            pass
-        # Direct test: provider=None → "gemini"
-        # This will try to import GeminiClient which may fail without deps,
-        # so we just test the routing logic
-        with pytest.raises(Exception):
-            # Will fail on import or API key, but the provider routing is correct
-            _create_client(None)
+        """None provider defaults to gemini (routes to GeminiClient)."""
+        with patch("utils.llm.provider.llm_gemini.GeminiClient") as MockGemini:
+            MockGemini.return_value = MagicMock()
+            client = _create_client(None)
+            MockGemini.assert_called_once()
