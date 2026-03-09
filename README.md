@@ -71,7 +71,9 @@ All experiment configuration and monitoring is managed through the **Admin Panel
 
 ### Setup
 
-If no experiment is currently active, the admin panel will direct you to a setup wizard: 
+If no experiment is currently active, the admin panel will direct you to a setup wizard:
+
+![Setup Wizard](https://github.com/user-attachments/assets/ab72014c-fe6e-4997-a92d-44aca71c1b7a)
 
 1. **Experiment Identity** — unique experiment ID and description
 2. **Session & Agents** — duration, agent settings, message pacing
@@ -88,6 +90,8 @@ You can pause and resume experiments, as well as reset or delete them, from the 
 ### Dashboard
 
 After saving an experiment, the admin panel switches to a monitoring dashboard with four tabs:
+
+![Admin Dashboard](https://github.com/user-attachments/assets/8adf5502-a030-4294-8461-ac7dd7324096)
 
 - **Overview** — live statistics, per-group enrollment, experimental configuration, and CSV token download.
 - **Sessions** — table of all sessions with status, treatment group, token, timestamps, duration, and message count.
