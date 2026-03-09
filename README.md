@@ -7,17 +7,19 @@ This is a research platform for integrating AI agents into simulated social medi
 
 ## STAGE Framework
 
-The platform is powered by **STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments), a multi-agent framework that separates agent coordination from message generation — much like a theatre separates direction from performance.
+The platform is powered by **STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments), a multi-agent framework that separates agent coordination from message generation.
 
 | Role | Responsibility |
 |------|----------------|
 | **Director** | Reads the chatroom and decides *who speaks next*, *what kind of action to take*, and *who to address*. Balances two criteria: **internal validity** (is the conversation satisfying the treatment?) and **ecological validity** (would it look natural to a human?). Passes structured instructions — *Objective, Motivation, Directive* — to the Performer. |
-| **Performer** | Generates the actual chatroom message in the agent's voice, from the Director's instructions. Can be swapped or fine-tuned for domain- or language-specific online speech without affecting the Director's coordination logic. |
+| **Performer** | Generates the actual chatroom message in the agent's voice, from the Director's instructions. Can be swapped or fine-tuned for domain- or language-specific online speech.|
 | **Moderator** | Quality gate that extracts clean message content from the Performer's raw output. If extraction fails, the Performer is retried (up to 3 attempts). |
+
+All models should be capable at instruction following. The director model should be a large, possibly reasoning model, as it is responsible for monitoring internal and ecological valicity criteria and directing the actions of agents accordingly. The performer model should be a smaller model with domain or language-specific pretraining or fine-tuning, permissive of more convincing online speech in the target domain/language. This seperation of concerns allows for specification of models better specialized for each of these tasks.
 
 All identities (agents and participant) are replaced with shuffled anonymous labels (*"Member 1", "Member 2", ...*) before being sent to any LLM, preventing the model from distinguishing human from agent and eliminating name-associated bias. Participant display names are stored only in the browser on their device and never sent to the backend.
 
-> ⚠️ **Note on emergent content:** Because the STAGE framework coordinates multiple generative models, the resulting chatroom discourse is emergent and cannot be fully predetermined. Responsibility for participant safety lies with the researcher, who must ensure appropriate informed consent, ethical approval, and active monitoring of study sessions. This is especially important when using unaligned, fine-tuned, or otherwise higher-risk models within the pipeline.
+> ⚠️ **Cautionary note on emergent content:** Because the STAGE framework coordinates multiple generative models, the resulting chatroom discourse is emergent and cannot be fully predetermined. Responsibility for participant safety lies with the researcher, who must ensure appropriate informed consent, ethical approval, and active monitoring of study sessions. This is especially important when using unaligned, fine-tuned, or otherwise higher-risk models within the pipeline.
 
 ## Installation
 
