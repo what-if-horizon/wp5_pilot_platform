@@ -47,6 +47,7 @@ def get_experiment_id() -> str:
 
 
 ADMIN_PASSPHRASE = os.environ.get("ADMIN_PASSPHRASE", "")
+CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "")  # comma-separated, e.g. "https://example.com"
 
 
 # ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
@@ -67,6 +68,20 @@ async def lifespan(_app: FastAPI):  # noqa: F841 — FastAPI requires the parame
     # Connect to Redis.
     await redis_client.init_redis(REDIS_URL)
     print(f"Redis ready ({REDIS_URL})")
+
+    # Warn about missing LLM API keys (they're only needed at runtime,
+    # but an early heads-up saves debugging time).
+    _llm_keys = {
+        "ANTHROPIC_API_KEY": "Anthropic (Claude)",
+        "HF_API_KEY": "HuggingFace",
+        "GEMINI_API_KEY": "Google Gemini",
+        "MISTRAL_API_KEY": "Mistral",
+    }
+    missing = [label for env, label in _llm_keys.items()
+               if not os.environ.get(env) or os.environ.get(env) == "your_api_key_here"]
+    if missing:
+        print(f"⚠  No API key set for: {', '.join(missing)}. "
+              "These providers will fail if selected in the admin wizard.")
 
     print("Backend ready. Configure experiments via the admin panel at /admin.")
 
@@ -89,9 +104,20 @@ async def lifespan(_app: FastAPI):  # noqa: F841 — FastAPI requires the parame
 
 app = FastAPI(title="Simulcra: Backend", lifespan=lifespan)
 
+# Build CORS allowed origins: always allow localhost for development,
+# plus any additional origins from CORS_ORIGINS env var.
+_cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+]
+if CORS_ORIGINS:
+    _cors_origins.extend(o.strip() for o in CORS_ORIGINS.split(",") if o.strip())
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Admin-Key"],
@@ -243,9 +269,22 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         # Attach so the pub/sub loop starts delivering messages to this WebSocket.
         await session.attach_websocket(send_to_frontend)
 
+    # Background heartbeat: send a ping every 30 seconds to detect stale connections.
+    async def heartbeat():
+        try:
+            while True:
+                await asyncio.sleep(30)
+                await websocket.send_json({"type": "ping"})
+        except Exception:
+            pass  # connection closed — the main loop handles cleanup
+
+    heartbeat_task = asyncio.create_task(heartbeat())
+
     try:
         while True:
             data = await websocket.receive_json()
+            if data.get("type") == "pong":
+                continue  # heartbeat response, ignore
             if data.get("type") == "user_message":
                 content = data.get("content", "").strip()
                 if content:
@@ -265,6 +304,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         print(f"WebSocket error for session {session_id}: {e}")
         if session:
             session.detach_websocket()
+
+    finally:
+        heartbeat_task.cancel()
 
 
 # ── Like / report endpoints ───────────────────────────────────────────────────

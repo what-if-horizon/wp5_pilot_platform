@@ -40,6 +40,11 @@ export function useWebSocket({
       ws.onmessage = (event) => {
         try {
           const obj = JSON.parse(event.data)
+          // Respond to server heartbeat pings.
+          if (obj.type === "ping") {
+            ws.send(JSON.stringify({ type: "pong" }))
+            return
+          }
           onMessageRef.current(obj)
         } catch (e) {
           console.error("Failed to parse WebSocket message:", e)

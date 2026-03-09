@@ -1,0 +1,30 @@
+# Caddy reverse proxy configuration.
+#
+# The {$DOMAIN} placeholder is replaced by the DOMAIN env var.
+# - Production: set DOMAIN=yourdomain.example.com — Caddy will
+#   automatically obtain and renew TLS certificates via Let's Encrypt.
+# - Local dev: set DOMAIN=localhost — serves over plain HTTP, no certs.
+
+{$DOMAIN} {
+	# Backend API routes
+	handle /session/* {
+		reverse_proxy app:8000
+	}
+
+	handle /ws/* {
+		reverse_proxy app:8000
+	}
+
+	handle /health {
+		reverse_proxy app:8000
+	}
+
+	handle /admin/* {
+		reverse_proxy app:8000
+	}
+
+	# Everything else → frontend
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

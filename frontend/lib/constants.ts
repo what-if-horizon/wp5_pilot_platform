@@ -1,6 +1,13 @@
+// In production (behind Caddy reverse proxy), leave NEXT_PUBLIC_BACKEND_BASE
+// empty — requests use same-origin relative paths. For local development
+// without a reverse proxy, set it to "http://localhost:8000".
 export const API_BASE =
-  (process.env.NEXT_PUBLIC_BACKEND_BASE as string) || "http://localhost:8000"
-export const WS_BASE = API_BASE.replace(/^http/, "ws")
+  (process.env.NEXT_PUBLIC_BACKEND_BASE as string) || ""
+export const WS_BASE = API_BASE
+  ? API_BASE.replace(/^http/, "ws")
+  : (typeof window !== "undefined"
+      ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
+      : "")
 
 // The canonical sender identity for the human participant (backend never sees real name).
 export const PARTICIPANT_SENDER = "participant"

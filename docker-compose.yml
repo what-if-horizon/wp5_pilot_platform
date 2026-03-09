@@ -53,6 +53,24 @@ services:
       - app
     restart: unless-stopped
 
+  # Reverse proxy for production deployment (start with: docker compose --profile production up)
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    depends_on:
+      - app
+      - frontend
+    restart: unless-stopped
+    profiles: [production]
+
   test:
     build:
       context: ./backend
@@ -71,3 +89,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  caddy_data:
+  caddy_config:

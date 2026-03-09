@@ -23,6 +23,8 @@ All identities (agents and participant) are replaced with shuffled anonymous lab
 
 Requires [Docker](https://docs.docker.com/get-docker/) with Compose.
 
+### Local development
+
 ```bash
 # 1. Create your environment file from the template
 cp .env.example .env
@@ -34,7 +36,32 @@ cp .env.example .env
 docker compose up
 ```
 
-The backend will be available at http://localhost:8000 and the frontend at http://localhost:3000.
+The backend will be available at `http://localhost:8000` and the frontend at `http://localhost:3000`.
+
+### Production deployment
+
+For hosting on a server where participants will access the platform over the internet:
+
+```bash
+# 1. Create your environment file
+cp .env.example .env
+
+# 2. Edit .env — set these values:
+#    ADMIN_PASSPHRASE=<a strong passphrase>
+#    DOMAIN=yourdomain.example.com
+#    NEXT_PUBLIC_BACKEND_BASE=            (leave empty)
+#    + your LLM API keys
+
+# 3. Start with the production profile (includes Caddy reverse proxy)
+docker compose --profile production up -d
+```
+
+This starts a [Caddy](https://caddyserver.com/) reverse proxy that:
+- Serves both the frontend and backend on a single domain
+- Automatically obtains and renews HTTPS certificates via Let's Encrypt
+- Handles WebSocket upgrades for the chat connections
+
+Your server must have **ports 80 and 443 open** and the domain's DNS must point to the server's IP address. Once running, the platform is available at `https://yourdomain.example.com` and the admin panel at `https://yourdomain.example.com/admin`.
 
 ## Quick Start
 
