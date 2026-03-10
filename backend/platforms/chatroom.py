@@ -160,7 +160,10 @@ class SimulationSession:
     async def start(self) -> None:
         """Start a fresh session (seed scenario + launch clock loop)."""
         self.running = True
-        self.logger.log_session_start(self.experimental_config, self.simulation_config, self.treatment_group)
+        self.logger.log_session_start(
+            self.experimental_config, self.simulation_config,
+            self.treatment_group, chatroom_context=self.chatroom_context,
+        )
 
         pool = db_conn.get_pool()
         await session_repo.activate_session(

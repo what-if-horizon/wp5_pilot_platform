@@ -69,8 +69,8 @@ def _format_instruction(instruction: dict) -> str:
         parts.append(f"**Objective**: {instruction['objective']}")
     if "motivation" in instruction:
         parts.append(f"**Motivation**: {instruction['motivation']}")
-    if "strategy" in instruction:
-        parts.append(f"**Strategy**: {instruction['strategy']}")
+    if "directive" in instruction:
+        parts.append(f"**Directive**: {instruction['directive']}")
     return "\n".join(parts)
 
 

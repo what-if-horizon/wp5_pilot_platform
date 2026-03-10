@@ -89,11 +89,11 @@ class TestFormatInstruction:
         result = _format_instruction({
             "objective": "say hi",
             "motivation": "be friendly",
-            "strategy": "casual tone",
+            "directive": "casual tone",
         })
         assert "**Objective**: say hi" in result
         assert "**Motivation**: be friendly" in result
-        assert "**Strategy**: casual tone" in result
+        assert "**Directive**: casual tone" in result
 
     def test_partial_keys(self):
         result = _format_instruction({"objective": "say hi"})
