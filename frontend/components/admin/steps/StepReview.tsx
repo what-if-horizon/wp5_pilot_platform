@@ -70,6 +70,7 @@ export default function StepReview({
         <KV label="Experiment ID" value={experimentId || "(not set)"} />
         <KV label="Starts at" value={startsAt ? new Date(startsAt).toLocaleString() : "(not set)"} />
         <KV label="Ends at" value={endsAt ? new Date(endsAt).toLocaleString() : "(not set)"} />
+        <KV label="Completion redirect" value={experimental.redirect_url || "(built-in thank-you page)"} />
       </Section>
 
       <Section title="Session & Agents">
@@ -77,7 +78,6 @@ export default function StepReview({
         <KV label="Agents" value={`${simulation.num_agents} (${simulation.agent_names.join(", ")})`} />
         <KV label="Messages/min" value={simulation.messages_per_minute} />
         <KV label="Context window" value={simulation.context_window_size} />
-        <KV label="Max concurrent turns" value={simulation.max_concurrent_turns} />
         <KV label="Random seed" value={simulation.random_seed} />
       </Section>
 
@@ -99,7 +99,6 @@ export default function StepReview({
             )
           })}
         </div>
-        <KV label="Concurrency limit" value={simulation.llm_concurrency_limit} />
       </Section>
 
       <Section title="Treatment Groups">

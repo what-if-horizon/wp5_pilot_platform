@@ -36,6 +36,7 @@ class SimulationSession:
         _preloaded_messages: Optional[List[dict]] = None,
         _preloaded_blocks: Optional[dict] = None,
         _config: Optional[Dict] = None,
+        _started_at: Optional[datetime] = None,
     ):
         self.session_id = session_id
         self.experiment_id = experiment_id
@@ -64,6 +65,7 @@ class SimulationSession:
             raise RuntimeError(f"treatment_group '{treatment_group}' has no 'treatment' description")
 
         self.chatroom_context = experimental_full.get("chatroom_context", "")
+        self.redirect_url = experimental_full.get("redirect_url", "")
 
         # Create LLM managers for each pipeline stage
         self.director_llm = LLMManager.from_simulation_config(self.simulation_config, role="director")
@@ -85,6 +87,10 @@ class SimulationSession:
             simulation_config=self.simulation_config,
             user_name=user_name,
         )
+
+        # Restore original start time on reconstruction so the timer is accurate.
+        if _started_at is not None:
+            self.state.start_time = _started_at
 
         # Preload persisted messages into in-memory state (crash recovery / reconstruction).
         if _preloaded_messages:
@@ -147,10 +153,7 @@ class SimulationSession:
         self.clock_task: Optional[asyncio.Task] = None
         self.running = False
         self._seeded = False
-        self._turn_semaphore = asyncio.Semaphore(
-            int(self.simulation_config.get("max_concurrent_turns", 3))
-        )
-        self._turn_tasks: set[asyncio.Task] = set()   # track background turns
+        self._turn_lock = asyncio.Lock()  # serialise turns so each sees prior messages
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -192,12 +195,6 @@ class SimulationSession:
                 await self.clock_task
             except asyncio.CancelledError:
                 pass
-        # Wait for in-flight turns to finish (up to 15s).
-        if self._turn_tasks:
-            await asyncio.wait(self._turn_tasks, timeout=15)
-            for t in list(self._turn_tasks):
-                if not t.done():
-                    t.cancel()
         if self._subscriber_task:
             self._subscriber_task.cancel()
             try:
@@ -227,9 +224,9 @@ class SimulationSession:
     async def _clock_loop(self) -> None:
         """Main simulation loop — tick-based pacing with messages_per_minute gate.
 
-        Turns are dispatched as background tasks so the clock keeps ticking
-        while LLM calls are in flight.  A semaphore caps concurrency to
-        prevent overwhelming LLM providers.
+        Turns are executed sequentially (awaited under a lock) so that each
+        Director→Performer→Moderator cycle sees the messages produced by the
+        previous turn.
         """
         tick_interval = 1.0
         mpm = self.simulation_config["messages_per_minute"]
@@ -238,6 +235,8 @@ class SimulationSession:
         while self.running:
             try:
                 if self.state.is_expired():
+                    await self._publish_session_end("duration_expired")
+                    await asyncio.sleep(0.5)  # let pub/sub deliver before teardown
                     await self.stop(reason="duration_expired")
                     break
 
@@ -246,9 +245,7 @@ class SimulationSession:
                     continue
 
                 if self._rng.random() < post_probability:
-                    task = asyncio.create_task(self._guarded_turn())
-                    self._turn_tasks.add(task)
-                    task.add_done_callback(self._turn_tasks.discard)
+                    await self._guarded_turn()
 
                 await asyncio.sleep(tick_interval)
 
@@ -264,14 +261,14 @@ class SimulationSession:
     TYPING_DELAY_MAX = 8.0   # cap so long messages don't stall too long
 
     async def _guarded_turn(self) -> None:
-        """Execute a single turn under the concurrency semaphore.
+        """Execute a single agent turn sequentially.
 
         Publishes typing_start/typing_stop events around the LLM pipeline
         so the frontend can show a "someone is writing..." indicator.
         After the LLM returns a message, a length-based typing delay is
         applied before the message is persisted and broadcast.
         """
-        async with self._turn_semaphore:
+        async with self._turn_lock:
             try:
                 await self._publish_typing(started=True)
                 result = await self.agent_manager.orchestrator.execute_turn(
@@ -308,6 +305,19 @@ class SimulationSession:
         except Exception as exc:
             self.logger.log_error("publish_typing", str(exc))
 
+    async def _publish_session_end(self, reason: str) -> None:
+        """Publish a session_end event via Redis pub/sub so the frontend can redirect."""
+        event = {
+            "event_type": "session_end",
+            "reason": reason,
+            "redirect_url": self.redirect_url or "",
+        }
+        try:
+            r = redis_client.get_redis()
+            await redis_client.publish_event(r, self.session_id, event)
+        except Exception as exc:
+            self.logger.log_error("publish_session_end", str(exc))
+
     # ── User message handling ─────────────────────────────────────────────────
 
     async def handle_user_message(
@@ -318,6 +328,8 @@ class SimulationSession:
         mentions: Optional[list] = None,
     ) -> None:
         """Handle an incoming user message — persist to DB and broadcast."""
+        if not self.running:
+            return  # session has ended; silently drop
         message = Message.create(
             sender=self.state.user_name,
             content=content,

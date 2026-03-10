@@ -69,6 +69,19 @@ async def lifespan(_app: FastAPI):  # noqa: F841 — FastAPI requires the parame
     await redis_client.init_redis(REDIS_URL)
     print(f"Redis ready ({REDIS_URL})")
 
+    # Auto-activate the most recently created non-paused experiment so
+    # participants can join without the researcher re-activating after restart.
+    global _experiment_id
+    async with pool.acquire() as conn:
+        row = await conn.fetchval(
+            "SELECT experiment_id FROM experiments "
+            "WHERE paused IS NOT TRUE "
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+    if row:
+        _experiment_id = row
+        print(f"Auto-activated experiment: {_experiment_id}")
+
     # Warn about missing LLM API keys (they're only needed at runtime,
     # but an early heads-up saves debugging time).
     _llm_keys = {
@@ -270,10 +283,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         await session.attach_websocket(send_to_frontend)
 
     # Background heartbeat: send a ping every 30 seconds to detect stale connections.
+    # Also closes the WebSocket when the session ends.
     async def heartbeat():
         try:
             while True:
-                await asyncio.sleep(30)
+                await asyncio.sleep(5)
+                if session and not session.running:
+                    # Session has ended — close the WebSocket cleanly.
+                    await websocket.close(code=1000, reason="session_ended")
+                    return
                 await websocket.send_json({"type": "ping"})
         except Exception:
             pass  # connection closed — the main loop handles cleanup

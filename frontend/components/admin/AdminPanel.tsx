@@ -31,9 +31,8 @@ const DEFAULT_SIMULATION: SimulationConfig = {
   num_agents: 5,
   agent_names: ["", "", "", "", ""],
   messages_per_minute: 6,
-  max_concurrent_turns: 3,
   director_llm_provider: "anthropic",
-  director_llm_model: "claude-opus-4-6",
+  director_llm_model: "claude-sonnet-4-6",
   director_temperature: 0.8,
   director_top_p: 0.8,
   director_max_tokens: 512,
@@ -48,11 +47,11 @@ const DEFAULT_SIMULATION: SimulationConfig = {
   moderator_top_p: 1.0,
   moderator_max_tokens: 256,
   context_window_size: 10,
-  llm_concurrency_limit: 5,
 }
 
 const DEFAULT_EXPERIMENTAL: ExperimentalConfig = {
   chatroom_context: "",
+  redirect_url: "",
   groups: {
     condition_1: { features: [], treatment: "" },
   },
@@ -280,7 +279,7 @@ export default function AdminPanel() {
   const handleOpenWizard = useCallback(() => {
     // Reset wizard to fresh defaults for a new experiment
     setSimulation({ ...DEFAULT_SIMULATION })
-    setExperimental({ ...DEFAULT_EXPERIMENTAL, groups: { condition_1: { features: [], treatment: "" } } })
+    setExperimental({ ...DEFAULT_EXPERIMENTAL, redirect_url: "", groups: { condition_1: { features: [], treatment: "" } } })
     setTokens({ ...DEFAULT_TOKENS })
     setExperimentId("")
     setDescription("")
@@ -378,6 +377,8 @@ export default function AdminPanel() {
       setStartsAt={setStartsAt}
       endsAt={endsAt}
       setEndsAt={setEndsAt}
+      redirectUrl={experimental.redirect_url}
+      setRedirectUrl={(v) => setExperimental((prev) => ({ ...prev, redirect_url: v }))}
       adminKey={adminKey}
     />,
     <StepSession

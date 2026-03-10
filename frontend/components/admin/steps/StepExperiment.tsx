@@ -12,6 +12,8 @@ interface StepExperimentProps {
   setStartsAt: (v: string) => void
   endsAt: string
   setEndsAt: (v: string) => void
+  redirectUrl: string
+  setRedirectUrl: (v: string) => void
   adminKey: string
 }
 
@@ -24,6 +26,8 @@ export default function StepExperiment({
   setStartsAt,
   endsAt,
   setEndsAt,
+  redirectUrl,
+  setRedirectUrl,
   adminKey,
 }: StepExperimentProps) {
   const [existingIds, setExistingIds] = useState<Set<string>>(new Set())
@@ -124,6 +128,29 @@ export default function StepExperiment({
               <p className="text-xs text-red-400 mt-1">End date must be after start date.</p>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="bg-admin-surface rounded-lg border border-admin-border p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-admin-text">Session Completion</h3>
+          <p className="text-xs text-admin-muted mt-1">
+            When a session ends (time limit reached), participants are redirected to this URL.
+            If left empty, a built-in &quot;Thank you for participating&quot; page is shown instead.
+          </p>
+        </div>
+        <div>
+          <label htmlFor="redirect-url" className="block text-sm font-medium text-admin-text mb-1">
+            Redirect URL (optional)
+          </label>
+          <input
+            id="redirect-url"
+            type="url"
+            value={redirectUrl}
+            onChange={(e) => setRedirectUrl(e.target.value)}
+            placeholder="e.g. https://your-survey-tool.com/post-study-questionnaire"
+            className="w-full px-3 py-2 border border-admin-border rounded-lg text-sm bg-admin-surface text-admin-text focus:outline-none focus:border-admin-accent focus:ring-1 focus:ring-admin-accent/30"
+          />
         </div>
       </div>
     </div>

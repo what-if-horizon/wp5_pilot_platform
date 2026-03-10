@@ -2,10 +2,16 @@
 
 DB tests
 --------
-Require a live PostgreSQL instance.  Set ``TEST_DATABASE_URL`` in the
-environment to point at a throw-away DB:
+Require a live PostgreSQL instance.  The test fixture automatically creates
+an ephemeral ``wp5_test_<pid>`` database, applies the schema, and drops it
+when the test run finishes.  Production data is never touched.
 
-    TEST_DATABASE_URL=postgresql://wp5user:wp5pass@localhost:5432/wp5_test
+Set ``TEST_DATABASE_URL`` to the **server** connection string (pointing at
+any existing DB such as ``postgres`` or ``wp5``).  The fixture will create
+a temporary database on that server — it will never run tests against the
+database in the URL itself.
+
+    TEST_DATABASE_URL=postgresql://wp5user:wp5pass@localhost:5432/postgres
 
 DB test files request ``db_pool`` and ``clean_tables`` explicitly — they are
 NOT auto-used, so Redis-only tests never attempt a DB connection.
@@ -26,46 +32,81 @@ try:
 except ModuleNotFoundError:  # allow unit tests to run without asyncpg
     asyncpg = None
 
-TEST_DB_URL = os.environ.get(
+# Server connection — used only to CREATE / DROP the ephemeral test DB.
+# This should point at any existing database on the server (e.g. postgres).
+TEST_SERVER_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql://wp5user:wp5pass@localhost:5432/wp5_test",
 )
 
+# Ephemeral database name — unique per process to allow parallel runs.
+_EPHEMERAL_DB = f"wp5_test_{os.getpid()}"
+
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "db" / "schema.sql"
+
+
+def _replace_dbname(dsn: str, new_db: str) -> str:
+    """Replace the database name in a PostgreSQL DSN."""
+    # Handle both postgresql://user:pass@host:port/dbname and ?query params
+    base, _, params = dsn.partition("?")
+    parts = base.rsplit("/", 1)
+    new_dsn = f"{parts[0]}/{new_db}"
+    if params:
+        new_dsn += f"?{params}"
+    return new_dsn
 
 
 # ── DB fixtures (not auto-used) ────────────────────────────────────────────────
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def db_pool():
-    """Session-scoped asyncpg pool.  Applies the schema on first use.
+    """Session-scoped asyncpg pool on an ephemeral test database.
+
+    Creates a fresh database, applies the schema, yields a pool, then
+    drops the database entirely on teardown.  Production data is never
+    touched — even if TEST_DATABASE_URL is misconfigured.
 
     Skips the entire test if PostgreSQL is not reachable so that CI
-    environments without a DB don't hard-fail.  Run with a live Postgres
-    (e.g. via ``docker compose up db``) to execute DB tests.
+    environments without a DB don't hard-fail.
     """
     if asyncpg is None:
         pytest.skip("asyncpg not installed; skipping DB tests.")
         return
+
+    # Connect to the server to create the ephemeral DB.
     try:
-        pool = await asyncpg.create_pool(TEST_DB_URL, min_size=2, max_size=10,
-                                         timeout=5)
+        admin_conn = await asyncpg.connect(TEST_SERVER_URL, timeout=5)
     except Exception as exc:
         pytest.skip(f"PostgreSQL not available ({exc}); skipping DB tests.")
         return
+
+    try:
+        # DROP leftover from a previous crashed run, then CREATE fresh.
+        await admin_conn.execute(f'DROP DATABASE IF EXISTS "{_EPHEMERAL_DB}"')
+        await admin_conn.execute(f'CREATE DATABASE "{_EPHEMERAL_DB}"')
+    except Exception as exc:
+        await admin_conn.close()
+        pytest.skip(f"Could not create test database ({exc}); skipping DB tests.")
+        return
+    finally:
+        await admin_conn.close()
+
+    # Connect to the ephemeral DB and apply schema.
+    ephemeral_url = _replace_dbname(TEST_SERVER_URL, _EPHEMERAL_DB)
+    pool = await asyncpg.create_pool(ephemeral_url, min_size=2, max_size=10)
     async with pool.acquire() as conn:
         await conn.execute(SCHEMA_PATH.read_text())
+
     yield pool
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            DROP TABLE IF EXISTS agent_blocks  CASCADE;
-            DROP TABLE IF EXISTS events        CASCADE;
-            DROP TABLE IF EXISTS messages      CASCADE;
-            DROP TABLE IF EXISTS sessions      CASCADE;
-            DROP TABLE IF EXISTS tokens        CASCADE;
-            DROP TABLE IF EXISTS experiments   CASCADE;
-        """)
+
+    # Teardown: close the pool, then drop the entire ephemeral DB.
     await pool.close()
+    try:
+        admin_conn = await asyncpg.connect(TEST_SERVER_URL, timeout=5)
+        await admin_conn.execute(f'DROP DATABASE IF EXISTS "{_EPHEMERAL_DB}"')
+        await admin_conn.close()
+    except Exception:
+        pass  # best-effort cleanup
 
 
 @pytest_asyncio.fixture(loop_scope="session")

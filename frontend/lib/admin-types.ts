@@ -6,7 +6,6 @@ export interface SimulationConfig {
   num_agents: number
   agent_names: string[]
   messages_per_minute: number
-  max_concurrent_turns: number
   director_llm_provider: string
   director_llm_model: string
   director_temperature: number
@@ -23,7 +22,6 @@ export interface SimulationConfig {
   moderator_top_p: number
   moderator_max_tokens: number
   context_window_size: number
-  llm_concurrency_limit: number
 }
 
 export interface SeedArticle {
@@ -41,6 +39,7 @@ export interface TreatmentGroup {
 
 export interface ExperimentalConfig {
   chatroom_context: string
+  redirect_url: string
   groups: Record<string, TreatmentGroup>
 }
 

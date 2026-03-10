@@ -139,6 +139,8 @@ Protected by `X-Admin-Key` header (must match `ADMIN_PASSPHRASE`). Returns 503 i
 
 ## Running Tests
 
+> ⚠️ **NOTE**: these are for development purposes, and should not be run during normal usage of the platform.
+
 ```bash
 # Run the full test suite inside Docker (recommended):
 docker compose run --rm test

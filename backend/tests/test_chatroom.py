@@ -30,8 +30,6 @@ MINIMAL_SIM_CONFIG = {
     "messages_per_minute": 6,
     "context_window_size": 10,
     "random_seed": 42,
-    "llm_concurrency_limit": 2,
-    "max_concurrent_turns": 3,
     "llm_provider": "gemini",
 }
 

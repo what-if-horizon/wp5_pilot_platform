@@ -130,6 +130,9 @@ export default function StepSession({ config, onChange, touched }: StepSessionPr
               onChange={(e) => onChange({ messages_per_minute: Math.max(0, parseInt(e.target.value) || 0) })}
               className={inputClass}
             />
+            <p className="text-xs text-admin-muted mt-1">
+              Upper bound — actual rate will be slower, limited by the Director→Performer→Moderator pipeline latency.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-admin-text mb-1">
@@ -143,19 +146,6 @@ export default function StepSession({ config, onChange, touched }: StepSessionPr
               className={inputClass}
             />
             <p className="text-xs text-admin-faint mt-1">Recent messages included in LLM prompts</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-admin-text mb-1">
-              Max concurrent agent turns
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={config.max_concurrent_turns}
-              onChange={(e) => onChange({ max_concurrent_turns: Math.max(1, parseInt(e.target.value) || 1) })}
-              className={inputClass}
-            />
-            <p className="text-xs text-admin-faint mt-1">Maximum agents composing messages simultaneously. Higher values create busier, more overlapping conversations</p>
           </div>
         </div>
       </div>

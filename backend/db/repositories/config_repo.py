@@ -28,7 +28,7 @@ def validate_simulation_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "messages_per_minute", "director_llm_provider", "director_llm_model",
         "performer_llm_provider", "performer_llm_model",
         "moderator_llm_provider", "moderator_llm_model",
-        "context_window_size", "llm_concurrency_limit",
+        "context_window_size",
     ]
     for k in required:
         if k not in out:
@@ -62,10 +62,8 @@ def validate_simulation_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("'messages_per_minute' must be >= 0")
     out["messages_per_minute"] = mpm
 
-    mct = int(out.get("max_concurrent_turns", 3))
-    if mct <= 0:
-        raise ValueError("'max_concurrent_turns' must be > 0")
-    out["max_concurrent_turns"] = mct
+    # Remove legacy max_concurrent_agents if present (turns are now sequential).
+    out.pop("max_concurrent_agents", None)
 
     for key in ["director_llm_provider", "director_llm_model",
                  "performer_llm_provider", "performer_llm_model",
@@ -96,11 +94,6 @@ def validate_simulation_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if cws <= 0:
         raise ValueError("'context_window_size' must be > 0")
     out["context_window_size"] = cws
-
-    llc = int(out["llm_concurrency_limit"])
-    if llc <= 0:
-        raise ValueError("'llm_concurrency_limit' must be > 0")
-    out["llm_concurrency_limit"] = llc
 
     return out
 

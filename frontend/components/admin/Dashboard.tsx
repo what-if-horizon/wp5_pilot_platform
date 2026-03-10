@@ -342,7 +342,6 @@ function OverviewTab({
                   <ConfigRow label="Agents" value={`${config.simulation.num_agents} (${config.simulation.agent_names.filter(Boolean).join(", ") || "auto"})`} />
                   <ConfigRow label="Messages/min" value={config.simulation.messages_per_minute} />
                   <ConfigRow label="Context window" value={config.simulation.context_window_size} />
-                  <ConfigRow label="Max concurrent turns" value={config.simulation.max_concurrent_turns} />
                   <ConfigRow label="Random seed" value={config.simulation.random_seed} />
                 </div>
               </div>
@@ -354,7 +353,6 @@ function OverviewTab({
                   <LLMRow role="Director" provider={config.simulation.director_llm_provider} model={config.simulation.director_llm_model} temp={config.simulation.director_temperature} topP={config.simulation.director_top_p} maxTokens={config.simulation.director_max_tokens} />
                   <LLMRow role="Performer" provider={config.simulation.performer_llm_provider} model={config.simulation.performer_llm_model} temp={config.simulation.performer_temperature} topP={config.simulation.performer_top_p} maxTokens={config.simulation.performer_max_tokens} />
                   <LLMRow role="Moderator" provider={config.simulation.moderator_llm_provider} model={config.simulation.moderator_llm_model} temp={config.simulation.moderator_temperature} topP={config.simulation.moderator_top_p} maxTokens={config.simulation.moderator_max_tokens} />
-                  <ConfigRow label="Concurrency limit" value={config.simulation.llm_concurrency_limit} />
                 </div>
               </div>
 

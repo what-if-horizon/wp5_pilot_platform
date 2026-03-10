@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { SimulationConfig, ProviderParamsMeta, TestLLMResult } from "../../../lib/admin-types"
 import { testLlm } from "../../../lib/admin-api"
 
@@ -62,6 +62,18 @@ function LLMRoleConfig({
 
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<TestLLMResult | null>(null)
+
+  // Clear test result whenever provider or model changes (including via "Copy Director" button)
+  const prevProviderRef = useRef(provider)
+  const prevModelRef = useRef(model)
+  useEffect(() => {
+    if (prevProviderRef.current !== provider || prevModelRef.current !== model) {
+      setTestResult(null)
+      onTestResult?.(role, false)
+    }
+    prevProviderRef.current = provider
+    prevModelRef.current = model
+  }, [provider, model, role, onTestResult])
 
   const paramsMeta = providerParams[provider]
   const hasMutex = paramsMeta?.mutual_exclusion?.includes("temperature") &&
@@ -347,22 +359,6 @@ export default function StepLLM({ config, onChange, llmProviders, providerModels
         </button>
       </div>
 
-      <div className="bg-admin-surface rounded-lg border border-admin-border p-5">
-        <h3 className="text-sm font-semibold text-admin-muted uppercase tracking-wider mb-3">Shared</h3>
-        <div>
-          <label className="block text-xs font-medium text-admin-muted mb-1">
-            Max concurrent LLM API calls (per stage)
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={config.llm_concurrency_limit}
-            onChange={(e) => onChange({ llm_concurrency_limit: Math.max(1, parseInt(e.target.value) || 1) })}
-            className="w-24 px-3 py-2 border border-admin-border rounded-lg text-sm bg-admin-surface text-admin-text focus:outline-none focus:border-admin-accent focus:ring-1 focus:ring-admin-accent/30"
-          />
-          <p className="text-xs text-admin-faint mt-1">Limits simultaneous requests to each LLM provider (Director, Performer, Moderator independently). Increase for faster throughput; decrease if hitting API rate limits</p>
-        </div>
-      </div>
     </div>
   )
 }

@@ -57,25 +57,13 @@ def _create_client_from_config(simulation_config: dict):
 
 
 class LLMManager:
-    """Generic LLM manager that controls concurrency for LLM calls.
+    """Generic LLM manager that delegates calls to an injected client.
 
-    Responsibilities:
-    - maintain an asyncio.Semaphore sized by the configured concurrency limit
-    - delegate actual LLM calls to an injected client (selected based on config)
+    Turns are serialised at the session level (chatroom._turn_lock), so
+    there is no need for a per-manager concurrency semaphore.
     """
 
-    def __init__(self, concurrency_limit: int, client: Optional[object] = None):
-        if concurrency_limit is None:
-            raise RuntimeError("llm_concurrency_limit must be provided")
-        try:
-            limit = int(concurrency_limit)
-        except Exception:
-            raise RuntimeError("llm_concurrency_limit must be an integer")
-        if limit <= 0:
-            raise RuntimeError("llm_concurrency_limit must be a positive integer (>0)")
-
-        self._semaphore = asyncio.Semaphore(limit)
-        # LLM client should provide `generate_response_async(prompt, max_retries)`
+    def __init__(self, client: Optional[object] = None):
         self.client = client
 
     @classmethod
@@ -97,27 +85,24 @@ class LLMManager:
                     client = _create_client(provider, model, temperature=temperature, top_p=top_p, max_tokens=max_tokens)
             if client is None:
                 client = _create_client_from_config(simulation_config)
-        return cls(simulation_config["llm_concurrency_limit"], client=client)
+        return cls(client=client)
 
     async def generate_response(self, prompt: str, max_retries: int = 1, system_prompt: str = None) -> Optional[str]:
-        """Acquire concurrency slot and delegate to the LLM client's async generator.
+        """Delegate to the LLM client's async generator.
 
         Returns the response text or None on failure.
         """
-        async with self._semaphore:
-            # The underlying client is expected to implement async method
-            # `generate_response_async(prompt, max_retries, system_prompt)` returning Optional[str].
-            try:
-                # type: ignore[attr-defined]
-                return await self.client.generate_response_async(prompt, max_retries=max_retries, system_prompt=system_prompt)
-            except AttributeError:
-                # Fallback: maybe client only exposes sync API
-                # run the sync call in a threadpool
-                loop = asyncio.get_running_loop()
-                return await loop.run_in_executor(None, lambda: self.client.generate_response(prompt, max_retries=max_retries, system_prompt=system_prompt))
-            except Exception as e:
-                print(f"[LLMManager] generate_response failed: {type(e).__name__}: {e}")
-                return None
+        try:
+            # type: ignore[attr-defined]
+            return await self.client.generate_response_async(prompt, max_retries=max_retries, system_prompt=system_prompt)
+        except AttributeError:
+            # Fallback: maybe client only exposes sync API
+            # run the sync call in a threadpool
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, lambda: self.client.generate_response(prompt, max_retries=max_retries, system_prompt=system_prompt))
+        except Exception as e:
+            print(f"[LLMManager] generate_response failed: {type(e).__name__}: {e}")
+            return None
 
 
 __all__ = ["LLMManager"]

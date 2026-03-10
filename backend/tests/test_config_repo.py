@@ -25,7 +25,6 @@ def _minimal_sim() -> dict:
         "moderator_llm_provider": "anthropic",
         "moderator_llm_model": "claude-3-haiku",
         "context_window_size": 10,
-        "llm_concurrency_limit": 3,
     }
 
 
@@ -57,7 +56,7 @@ class TestValidateSimulationConfig:
 
     def test_optional_defaults(self):
         result = config_repo.validate_simulation_config(_minimal_sim())
-        assert result["max_concurrent_turns"] == 3
+        assert "max_concurrent_agents" not in result
         assert result["director_temperature"] == 1.0
         assert result["performer_temperature"] == 1.0
         assert result["moderator_temperature"] == 1.0
@@ -81,7 +80,7 @@ class TestValidateSimulationConfig:
         "messages_per_minute", "director_llm_provider", "director_llm_model",
         "performer_llm_provider", "performer_llm_model",
         "moderator_llm_provider", "moderator_llm_model",
-        "context_window_size", "llm_concurrency_limit",
+        "context_window_size",
     ])
     def test_missing_required_key(self, missing_key):
         cfg = _minimal_sim()
@@ -155,17 +154,12 @@ class TestValidateSimulationConfig:
         with pytest.raises(ValueError, match="context_window_size"):
             config_repo.validate_simulation_config(cfg)
 
-    def test_zero_max_concurrent_turns(self):
+    def test_max_concurrent_agents_stripped(self):
+        """Legacy max_concurrent_agents should be silently removed."""
         cfg = _minimal_sim()
-        cfg["max_concurrent_turns"] = 0
-        with pytest.raises(ValueError, match="max_concurrent_turns"):
-            config_repo.validate_simulation_config(cfg)
-
-    def test_zero_concurrency_limit(self):
-        cfg = _minimal_sim()
-        cfg["llm_concurrency_limit"] = 0
-        with pytest.raises(ValueError, match="llm_concurrency_limit"):
-            config_repo.validate_simulation_config(cfg)
+        cfg["max_concurrent_agents"] = 5
+        result = config_repo.validate_simulation_config(cfg)
+        assert "max_concurrent_agents" not in result
 
     # boundary values
     def test_temperature_at_zero(self):
