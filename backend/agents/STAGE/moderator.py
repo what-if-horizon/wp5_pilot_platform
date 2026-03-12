@@ -5,22 +5,23 @@ from typing import Optional
 # Sentinel value the Moderator returns when no valid message content is found
 NO_CONTENT = "NO_CONTENT"
 
-# Load Moderator prompt templates at import time
+# Load unified Moderator prompt template at import time
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
-_SYSTEM_TEMPLATE = (_PROMPTS_DIR / "system" / "moderator_prompt.md").read_text(encoding="utf-8")
-_USER_TEMPLATE = (_PROMPTS_DIR / "user" / "moderator_prompt.md").read_text(encoding="utf-8")
+_UNIFIED_TEMPLATE = (_PROMPTS_DIR / "moderator_prompt.md").read_text(encoding="utf-8")
+
+from agents.STAGE.prompts.prompt_renderer import render as _render_prompt
 
 
 def build_moderator_system_prompt(chatroom_context: str = "") -> str:
     """Build the Moderator system prompt (session-static)."""
-    prompt = _SYSTEM_TEMPLATE
+    prompt = _render_prompt(_UNIFIED_TEMPLATE, "system")
     prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
     return prompt
 
 
 def build_moderator_user_prompt(performer_output: str, action_type: str) -> str:
     """Build the per-turn user prompt with the Performer's raw output."""
-    prompt = _USER_TEMPLATE
+    prompt = _render_prompt(_UNIFIED_TEMPLATE, "user")
     prompt = prompt.replace("{PERFORMER_OUTPUT}", performer_output)
     prompt = prompt.replace("{ACTION_TYPE}", action_type)
     return prompt

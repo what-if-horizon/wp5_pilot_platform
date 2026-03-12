@@ -131,6 +131,7 @@ class SimulationSession:
             context_window_size=int(self.simulation_config["context_window_size"]),
             chatroom_context=self.chatroom_context,
             rng=self._rng,
+            duplicate_prompts=bool(self.simulation_config.get("duplicate_prompts", False)),
         )
 
         self.features = load_features(self.experimental_config)

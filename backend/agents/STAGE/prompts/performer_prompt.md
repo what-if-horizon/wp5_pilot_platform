@@ -25,7 +25,12 @@ Underneath the Director's Instructions, you will find specific instructions for 
 
 ## Director's Instructions
 
+{#SYSTEM}
+The Director's instructions (Objective, Motivation, Directive) will be provided in the user message below.
+{/SYSTEM}
+{#USER}
 `{PERFORMER_INSTRUCTION GOES HERE}`
+{/USER}
 
 ---
 
@@ -90,9 +95,13 @@ If your output contains anything beyond the chatroom message itself, you have fa
 
 ## Chat Log
 
+{#SYSTEM}
+The recent chatroom messages will be provided in the user message below.
+{/SYSTEM}
+{#USER}
 Here are the recent chatroom messages for context:
 
 `{CHAT LOG GOES HERE}`
+{/USER}
 
 ---
-

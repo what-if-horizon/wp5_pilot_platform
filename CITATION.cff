@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+title: "STAGE: Simulated Theater for Agent-Generated Experiments"
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+authors:
+  - given-names: Rupert
+    family-names: Kiddle
+    affiliation: "Vrije Universiteit Amsterdam, Dept. of Communication Science"
+    orcid: "https://orcid.org/0000-0002-5353-2014"
+  - given-names: Wouter
+    family-names: van Atteveldt
+    affiliation: "Vrije Universiteit Amsterdam, Dept. of Communication Science"
+    orcid: "https://orcid.org/0000-0003-1237-538X"
+license: AGPL-3.0
+repository-code: "https://github.com/Rptkiddle/wp5_pilot_platform"
+keywords:
+  - multi-agent systems
+  - online experiments
+  - simulated social media
+  - human-AI interaction
+  - computational communication science

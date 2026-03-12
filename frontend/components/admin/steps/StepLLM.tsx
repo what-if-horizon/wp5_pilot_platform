@@ -359,6 +359,31 @@ export default function StepLLM({ config, onChange, llmProviders, providerModels
         </button>
       </div>
 
+      {/* Duplicate prompts toggle */}
+      <div className="bg-admin-surface rounded-lg border border-admin-border p-4 space-y-2">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.duplicate_prompts}
+            onChange={(e) => onChange({ duplicate_prompts: e.target.checked })}
+            className="w-4 h-4 rounded border-admin-border text-admin-accent focus:ring-admin-accent/30"
+          />
+          <span className="text-sm font-medium text-admin-text">
+            Duplicate prompts (belt &amp; braces)
+          </span>
+        </label>
+        <p className="text-xs text-admin-muted pl-7">
+          When enabled, the full system prompt instructions are repeated in
+          every user message. This can help weaker models follow instructions
+          more reliably, but roughly doubles token consumption per LLM call.
+        </p>
+        {config.duplicate_prompts && (
+          <p className="text-xs text-amber-500 pl-7">
+            Warning: this will significantly increase token usage and cost.
+          </p>
+        )}
+      </div>
+
     </div>
   )
 }

@@ -95,6 +95,8 @@ def validate_simulation_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("'context_window_size' must be > 0")
     out["context_window_size"] = cws
 
+    out["duplicate_prompts"] = bool(out.get("duplicate_prompts", False))
+
     return out
 
 

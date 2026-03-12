@@ -5,10 +5,11 @@ from typing import List, Optional
 from models import Message
 
 
-# Load Performer prompt templates at import time
+# Load unified Performer prompt template at import time
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
-_RAW_SYSTEM_TEMPLATE = (_PROMPTS_DIR / "system" / "performer_prompt.md").read_text(encoding="utf-8")
-_RAW_USER_TEMPLATE = (_PROMPTS_DIR / "user" / "performer_prompt.md").read_text(encoding="utf-8")
+_RAW_UNIFIED_TEMPLATE = (_PROMPTS_DIR / "performer_prompt.md").read_text(encoding="utf-8")
+
+from agents.STAGE.prompts.prompt_renderer import render as _render_prompt
 
 
 def _parse_template(raw: str):
@@ -43,9 +44,10 @@ def _parse_template(raw: str):
     return base, blocks
 
 
-# Only the user template needs parsing (action-block selection happens per turn).
-# The system template retains all action blocks as-is for reference.
-_PARSED_USER_TEMPLATE = _parse_template(_RAW_USER_TEMPLATE)
+# Render the unified template for each mode, then parse the user variant
+# (action-block selection happens per turn; system retains all blocks as-is).
+_SYSTEM_TEMPLATE = _render_prompt(_RAW_UNIFIED_TEMPLATE, "system")
+_PARSED_USER_TEMPLATE = _parse_template(_render_prompt(_RAW_UNIFIED_TEMPLATE, "user"))
 
 
 def _format_chat_log(messages: List[Message]) -> str:
@@ -81,39 +83,28 @@ def build_performer_system_prompt(chatroom_context: str = "") -> str:
     the full instruction set. Dynamic placeholders (Director's instructions,
     chat log) are left as descriptive notes already in the template.
     """
-    prompt = _RAW_SYSTEM_TEMPLATE
+    prompt = _SYSTEM_TEMPLATE
     prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
     return prompt
 
 
-def build_performer_user_prompt(
-    instruction: dict,
+def _resolve_action_block(
     action_type: str,
+    action_blocks: dict,
     messages: List[Message],
-    target_message: Optional[Message] = None,
-    target_user: Optional[str] = None,
-    chatroom_context: str = "",
+    target_message: Optional[Message],
+    target_user: Optional[str],
 ) -> str:
-    """Build the full Performer user prompt from the Director's output.
-
-    Selects the appropriate action-type block from the parsed template,
-    injects dynamic values, and fills the base template placeholders.
-    """
-    base_template, action_blocks = _PARSED_USER_TEMPLATE
-
-    # Select the action-type block (fall back to 'message' for unknown types)
-    # For 'message' with a target_user, use the 'message_targeted' variant
+    """Select and populate the correct action-type block."""
     if action_type == "message" and target_user:
         block_key = "message_targeted"
     else:
         block_key = action_type
     action_block = action_blocks.get(block_key, action_blocks["message"])
 
-    # Substitute dynamic values within the selected block
     if block_key == "message_targeted":
         user = target_user or "(unknown)"
         action_block = action_block.replace("{TARGET_USER}", user)
-        # Use the last message in the chat log as the target content
         target_content = "(message not found)"
         if messages:
             last = messages[-1]
@@ -128,12 +119,46 @@ def build_performer_user_prompt(
         user = target_user or "(unknown)"
         action_block = action_block.replace("{TARGET_USER}", user)
 
-    # Assemble the full prompt from the base template
-    prompt = base_template
-    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
-    prompt = prompt.replace("`{PERFORMER_INSTRUCTION GOES HERE}`", _format_instruction(instruction))
-    prompt = prompt.replace("{ACTION_BLOCK}", action_block)
-    prompt = prompt.replace("`{CHAT LOG GOES HERE}`", _format_chat_log(messages))
+    return action_block
+
+
+def build_performer_user_prompt(
+    instruction: dict,
+    action_type: str,
+    messages: List[Message],
+    target_message: Optional[Message] = None,
+    target_user: Optional[str] = None,
+    chatroom_context: str = "",
+    duplicate_prompts: bool = False,
+) -> str:
+    """Build the Performer user prompt from the Director's output.
+
+    When *duplicate_prompts* is True, the full template (instructions + data)
+    is sent.  When False (default), only dynamic data is sent.
+    """
+    base_template, action_blocks = _PARSED_USER_TEMPLATE
+
+    action_block = _resolve_action_block(
+        action_type, action_blocks, messages, target_message, target_user,
+    )
+
+    if duplicate_prompts:
+        prompt = base_template
+        prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
+        prompt = prompt.replace("`{PERFORMER_INSTRUCTION GOES HERE}`", _format_instruction(instruction))
+        prompt = prompt.replace("{ACTION_BLOCK}", action_block)
+        prompt = prompt.replace("`{CHAT LOG GOES HERE}`", _format_chat_log(messages))
+    else:
+        chat_log = _format_chat_log(messages)
+        prompt = (
+            f"## Director's Instructions\n\n"
+            f"{_format_instruction(instruction)}\n\n"
+            f"---\n\n"
+            f"## Action Type Instructions\n\n"
+            f"{action_block}\n\n"
+            f"## Chat Log\n\n"
+            f"{chat_log}\n"
+        )
 
     return prompt
 

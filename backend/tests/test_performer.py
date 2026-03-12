@@ -194,13 +194,25 @@ class TestBuildPerformerUserPrompt:
         assert len(result) > 0
 
     def test_chatroom_context_injected(self):
+        # Context only appears in user prompt when duplicate_prompts is enabled
+        result = build_performer_user_prompt(
+            instruction=self._instruction(),
+            action_type="message",
+            messages=[],
+            chatroom_context="Climate debate",
+            duplicate_prompts=True,
+        )
+        assert "Climate debate" in result
+
+    def test_chatroom_context_absent_when_not_duplicated(self):
+        # When duplicate_prompts=False (default), context is system-prompt-only
         result = build_performer_user_prompt(
             instruction=self._instruction(),
             action_type="message",
             messages=[],
             chatroom_context="Climate debate",
         )
-        assert "Climate debate" in result
+        assert "Climate debate" not in result
 
     def test_empty_messages(self):
         result = build_performer_user_prompt(

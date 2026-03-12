@@ -6,10 +6,11 @@ from typing import List
 from models import Message, Agent
 
 
-# Load Director prompt templates at import time
+# Load unified Director prompt template at import time
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
-_SYSTEM_TEMPLATE = (_PROMPTS_DIR / "system" / "director_prompt.md").read_text(encoding="utf-8")
-_USER_TEMPLATE = (_PROMPTS_DIR / "user" / "director_prompt.md").read_text(encoding="utf-8")
+_UNIFIED_TEMPLATE = (_PROMPTS_DIR / "director_prompt.md").read_text(encoding="utf-8")
+
+from agents.STAGE.prompts.prompt_renderer import render as _render_prompt
 
 
 def format_chat_log(messages: List[Message]) -> str:
@@ -44,26 +45,39 @@ def build_director_system_prompt(treatment: str, human_user: str = "participant"
     Per-turn dynamic data (chat log, available agents) is left as
     placeholder notes — those sections will be filled in the user prompt.
     """
-    prompt = _SYSTEM_TEMPLATE
+    prompt = _render_prompt(_UNIFIED_TEMPLATE, "system")
     prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
     prompt = prompt.replace("{TREATMENT GOES HERE}", treatment)
     prompt = prompt.replace("{HUMAN_USER}", human_user)
     return prompt
 
 
-def build_director_user_prompt(treatment: str, messages: List[Message], agents: List[Agent], human_user: str = "participant", chatroom_context: str = "") -> str:
-    """Build the full Director user prompt by injecting context, treatment, chat log, and human user name."""
+def build_director_user_prompt(
+    treatment: str,
+    messages: List[Message],
+    agents: List[Agent],
+    human_user: str = "participant",
+    chatroom_context: str = "",
+    duplicate_prompts: bool = False,
+) -> str:
+    """Build the Director user prompt.
+
+    When *duplicate_prompts* is True (belt-and-braces mode), the full
+    template instructions are repeated in the user message alongside the
+    dynamic data. When False (default), only the dynamic data is sent.
+    """
     chat_log = format_chat_log(messages)
     agent_names = ", ".join(a.name for a in agents)
 
-    prompt = _USER_TEMPLATE
-    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
-    prompt = prompt.replace("{TREATMENT GOES HERE}", treatment)
-    prompt = prompt.replace("{CHAT LOG GOES HERE}", chat_log)
-    prompt = prompt.replace("{HUMAN_USER}", human_user)
-
-    # Append the list of available agent names so the Director knows who it can select
-    prompt += f"\n\n## Available Agents\n\n{agent_names}\n"
+    if duplicate_prompts:
+        prompt = _render_prompt(_UNIFIED_TEMPLATE, "user")
+        prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
+        prompt = prompt.replace("{TREATMENT GOES HERE}", treatment)
+        prompt = prompt.replace("{CHAT LOG GOES HERE}", chat_log)
+        prompt = prompt.replace("{HUMAN_USER}", human_user)
+        prompt += f"\n\n## Available Agents\n\n{agent_names}\n"
+    else:
+        prompt = f"## Chat Log\n\n{chat_log}\n\n## Available Agents\n\n{agent_names}\n"
 
     return prompt
 

@@ -180,6 +180,16 @@ wp5_pilot_platform/
 └── README.md
 ```
 
+## Citation
+
+If you use this platform in your research, please cite it:
+
+> Kiddle, R. & van Atteveldt, W. (2026). *STAGE: Simulated Theater for Agent-Generated Experiments* [Software]. GitHub. https://github.com/Rptkiddle/wp5_pilot_platform
+
+A methods paper is forthcoming — this section will be updated with a full reference when available.
+
+GitHub also provides a "Cite this repository" button (powered by [`CITATION.cff`](CITATION.cff)).
+
 ## License
 
-This project is licensed under the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html) — you are free to use, modify, and distribute this software, provided that any derivative work is also released under the same license and includes attribution to the original author. 
+This project is licensed under the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html) — you are free to use, modify, and distribute this software, provided that any derivative work is also released under the same license and includes attribution to the original author.

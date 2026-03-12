@@ -66,8 +66,15 @@ The `performer_instruction` will be passed to the Performer. Make sure it is sel
 
 ## Chat Log
 
+{#SYSTEM}
 The recent chatroom messages will be provided in the user message below.
 
 ## Available Agents
 
 The list of available agents will be provided in the user message below.
+{/SYSTEM}
+{#USER}
+Here are the recent chatroom messages:
+
+`{CHAT LOG GOES HERE}`
+{/USER}

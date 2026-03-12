@@ -107,6 +107,7 @@ class Orchestrator:
         context_window_size: int = 10,
         chatroom_context: str = "",
         rng: Optional[random.Random] = None,
+        duplicate_prompts: bool = False,
     ):
         self.director_llm = director_llm
         self.performer_llm = performer_llm
@@ -115,6 +116,7 @@ class Orchestrator:
         self.logger = logger
         self.context_window_size = context_window_size
         self.chatroom_context = chatroom_context
+        self._duplicate_prompts = duplicate_prompts
 
         # Build the shuffled name mapping (stable for the session lifetime).
         _rng = rng or random.Random()
@@ -162,6 +164,7 @@ class Orchestrator:
             treatment, anon_recent, anon_agents,
             human_user=self._anon_user,
             chatroom_context=self.chatroom_context,
+            duplicate_prompts=self._duplicate_prompts,
         )
         director_raw = None
         try:
@@ -244,6 +247,7 @@ class Orchestrator:
             target_message=anon_target_message,
             target_user=anon_target_user,
             chatroom_context=self.chatroom_context,
+            duplicate_prompts=self._duplicate_prompts,
         )
 
         content = None

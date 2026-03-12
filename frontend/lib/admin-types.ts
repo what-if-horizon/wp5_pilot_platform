@@ -22,6 +22,7 @@ export interface SimulationConfig {
   moderator_top_p: number
   moderator_max_tokens: number
   context_window_size: number
+  duplicate_prompts: boolean
 }
 
 export interface SeedArticle {
