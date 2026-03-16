@@ -21,8 +21,9 @@ export interface SimulationConfig {
   moderator_temperature: number
   moderator_top_p: number
   moderator_max_tokens: number
-  context_window_size: number
-  duplicate_prompts: boolean
+  evaluate_interval: number
+  action_window_size: number
+  performer_memory_size: number
 }
 
 export interface SeedArticle {
@@ -34,12 +35,13 @@ export interface SeedArticle {
 
 export interface TreatmentGroup {
   features: string[]
-  treatment: string
+  internal_validity_criteria: string
   seed?: SeedArticle
 }
 
 export interface ExperimentalConfig {
   chatroom_context: string
+  ecological_validity_criteria: string
   redirect_url: string
   groups: Record<string, TreatmentGroup>
 }

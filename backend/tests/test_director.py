@@ -1,11 +1,17 @@
-"""Unit tests for agents/STAGE/director.py — parsing and formatting."""
+"""Unit tests for agents/STAGE/director.py — parsing and formatting (Update + Evaluate + Action)."""
 import json
 import pytest
 from datetime import datetime, timezone
 
 from models.message import Message
 from models.agent import Agent
-from agents.STAGE.director import format_chat_log, parse_director_response
+from agents.STAGE.director import (
+    format_chat_log,
+    format_agent_profiles,
+    parse_update_response,
+    parse_evaluate_response,
+    parse_action_response,
+)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -55,153 +61,206 @@ class TestFormatChatLog:
         msg = _msg(liked_by={"Bob", "Carol"})
         result = format_chat_log([msg])
         assert "liked by" in result
-        # Liked_by is sorted
         assert "Bob" in result
         assert "Carol" in result
 
     def test_multiple_metadata_separated_by_semicolons(self):
         msg = _msg(reply_to="m0", mentions=["Bob"], liked_by={"Carol"})
         result = format_chat_log([msg])
-        assert ";" in result  # metadata items separated by semicolons
+        assert ";" in result
 
 
-# ── parse_director_response — valid inputs ───────────────────────────────────
+# ── format_agent_profiles ──────────────────────────────────────────────────
 
-class TestParseDirectorResponseValid:
+class TestFormatAgentProfiles:
+    def test_empty_profiles(self):
+        result = format_agent_profiles({})
+        assert "No performer profiles yet" in result
+
+    def test_profiles_with_content(self):
+        profiles = {"Performer 1": "Took a sceptical stance", "Performer 2": ""}
+        result = format_agent_profiles(profiles)
+        assert "**Performer 1**: Took a sceptical stance" in result
+        assert "**Performer 2**: (This performer has not acted yet.)" in result
+
+
+# ── parse_update_response — valid inputs ─────────────────────────────────────
+
+class TestParseUpdateResponseValid:
+    def test_plain_json(self):
+        raw = json.dumps({"performer_profile_update": "Active and friendly."})
+        data = parse_update_response(raw)
+        assert data["performer_profile_update"] == "Active and friendly."
+
+    def test_json_in_markdown_fence(self):
+        raw = '```json\n{"performer_profile_update":"neutral"}\n```'
+        data = parse_update_response(raw)
+        assert data["performer_profile_update"] == "neutral"
+
+
+# ── parse_update_response — invalid inputs ───────────────────────────────────
+
+class TestParseUpdateResponseInvalid:
+    def test_not_json(self):
+        with pytest.raises(ValueError, match="not valid JSON"):
+            parse_update_response("this is not json")
+
+    def test_missing_performer_profile_update(self):
+        raw = json.dumps({"something_else": "ok"})
+        with pytest.raises(ValueError, match="performer_profile_update"):
+            parse_update_response(raw)
+
+
+# ── parse_evaluate_response — valid inputs ───────────────────────────────────
+
+class TestParseEvaluateResponseValid:
     def test_plain_json(self):
         raw = json.dumps({
-            "next_agent": "Alice",
+            "internal_validity_evaluation": "Good",
+            "ecological_validity_evaluation": "Natural",
+        })
+        data = parse_evaluate_response(raw)
+        assert data["internal_validity_evaluation"] == "Good"
+        assert data["ecological_validity_evaluation"] == "Natural"
+
+    def test_json_in_markdown_fence(self):
+        raw = '```json\n{"internal_validity_evaluation":"ok","ecological_validity_evaluation":"fine"}\n```'
+        data = parse_evaluate_response(raw)
+        assert data["internal_validity_evaluation"] == "ok"
+
+
+# ── parse_evaluate_response — invalid inputs ─────────────────────────────────
+
+class TestParseEvaluateResponseInvalid:
+    def test_not_json(self):
+        with pytest.raises(ValueError, match="not valid JSON"):
+            parse_evaluate_response("this is not json")
+
+    def test_missing_internal_validity(self):
+        raw = json.dumps({"ecological_validity_evaluation": "ok"})
+        with pytest.raises(ValueError, match="internal_validity_evaluation"):
+            parse_evaluate_response(raw)
+
+    def test_missing_ecological_validity(self):
+        raw = json.dumps({"internal_validity_evaluation": "ok"})
+        with pytest.raises(ValueError, match="ecological_validity_evaluation"):
+            parse_evaluate_response(raw)
+
+
+# ── parse_action_response — valid inputs ────────────────────────────────────────
+
+class TestParseActionResponseValid:
+    def test_plain_json(self):
+        raw = json.dumps({
+            "next_performer": "Alice",
             "action_type": "message",
             "performer_instruction": {"objective": "say hi"},
         })
-        data = parse_director_response(raw)
-        assert data["next_agent"] == "Alice"
+        data = parse_action_response(raw)
+        assert data["next_performer"] == "Alice"
         assert data["action_type"] == "message"
 
     def test_json_in_markdown_fence(self):
-        raw = '```json\n{"next_agent":"Alice","action_type":"message","performer_instruction":{"objective":"greet"}}\n```'
-        data = parse_director_response(raw)
-        assert data["next_agent"] == "Alice"
-
-    def test_json_in_bare_fence(self):
-        raw = '```\n{"next_agent":"Alice","action_type":"message","performer_instruction":{"objective":"greet"}}\n```'
-        data = parse_director_response(raw)
-        assert data["next_agent"] == "Alice"
+        raw = '```json\n{"next_performer":"Alice","action_type":"message","performer_instruction":{"objective":"greet"}}\n```'
+        data = parse_action_response(raw)
+        assert data["next_performer"] == "Alice"
 
     def test_reply_action(self):
         raw = json.dumps({
-            "next_agent": "Bob",
+            "next_performer": "Bob",
             "action_type": "reply",
             "target_message_id": "msg-42",
             "performer_instruction": {"objective": "agree"},
         })
-        data = parse_director_response(raw)
+        data = parse_action_response(raw)
         assert data["action_type"] == "reply"
         assert data["target_message_id"] == "msg-42"
 
     def test_like_action(self):
         raw = json.dumps({
-            "next_agent": "Bob",
+            "next_performer": "Bob",
             "action_type": "like",
             "target_message_id": "msg-42",
         })
-        data = parse_director_response(raw)
+        data = parse_action_response(raw)
         assert data["action_type"] == "like"
 
     def test_mention_action(self):
         raw = json.dumps({
-            "next_agent": "Carol",
+            "next_performer": "Carol",
             "action_type": "@mention",
             "target_user": "Dave",
             "performer_instruction": {"objective": "ask question"},
         })
-        data = parse_director_response(raw)
+        data = parse_action_response(raw)
         assert data["target_user"] == "Dave"
 
     def test_like_does_not_require_performer_instruction(self):
         raw = json.dumps({
-            "next_agent": "Alice",
+            "next_performer": "Alice",
             "action_type": "like",
             "target_message_id": "msg-1",
         })
-        data = parse_director_response(raw)
+        data = parse_action_response(raw)
         assert "performer_instruction" not in data
 
 
-# ── parse_director_response — invalid inputs ─────────────────────────────────
+# ── parse_action_response — invalid inputs ──────────────────────────────────────
 
-class TestParseDirectorResponseInvalid:
+class TestParseActionResponseInvalid:
     def test_not_json(self):
         with pytest.raises(ValueError, match="not valid JSON"):
-            parse_director_response("this is not json at all")
+            parse_action_response("this is not json at all")
 
-    def test_missing_next_agent(self):
+    def test_missing_next_performer(self):
         raw = json.dumps({"action_type": "message", "performer_instruction": {}})
-        with pytest.raises(ValueError, match="next_agent"):
-            parse_director_response(raw)
+        with pytest.raises(ValueError, match="next_performer"):
+            parse_action_response(raw)
 
     def test_missing_action_type(self):
-        raw = json.dumps({"next_agent": "Alice", "performer_instruction": {}})
+        raw = json.dumps({"next_performer": "Alice", "performer_instruction": {}})
         with pytest.raises(ValueError, match="action_type"):
-            parse_director_response(raw)
+            parse_action_response(raw)
 
     def test_invalid_action_type(self):
         raw = json.dumps({
-            "next_agent": "Alice",
+            "next_performer": "Alice",
             "action_type": "shout",
             "performer_instruction": {},
         })
         with pytest.raises(ValueError, match="invalid action_type"):
-            parse_director_response(raw)
+            parse_action_response(raw)
 
     def test_reply_missing_target_message_id(self):
         raw = json.dumps({
-            "next_agent": "Alice",
+            "next_performer": "Alice",
             "action_type": "reply",
             "performer_instruction": {"objective": "agree"},
         })
         with pytest.raises(ValueError, match="target_message_id"):
-            parse_director_response(raw)
+            parse_action_response(raw)
 
     def test_like_missing_target_message_id(self):
         raw = json.dumps({
-            "next_agent": "Alice",
+            "next_performer": "Alice",
             "action_type": "like",
         })
         with pytest.raises(ValueError, match="target_message_id"):
-            parse_director_response(raw)
+            parse_action_response(raw)
 
     def test_mention_missing_target_user(self):
         raw = json.dumps({
-            "next_agent": "Alice",
+            "next_performer": "Alice",
             "action_type": "@mention",
             "performer_instruction": {"objective": "greet"},
         })
         with pytest.raises(ValueError, match="target_user"):
-            parse_director_response(raw)
+            parse_action_response(raw)
 
     def test_message_missing_performer_instruction(self):
         raw = json.dumps({
-            "next_agent": "Alice",
+            "next_performer": "Alice",
             "action_type": "message",
         })
         with pytest.raises(ValueError, match="performer_instruction"):
-            parse_director_response(raw)
-
-    def test_reply_missing_performer_instruction(self):
-        raw = json.dumps({
-            "next_agent": "Alice",
-            "action_type": "reply",
-            "target_message_id": "m1",
-        })
-        with pytest.raises(ValueError, match="performer_instruction"):
-            parse_director_response(raw)
-
-    def test_mention_missing_performer_instruction(self):
-        raw = json.dumps({
-            "next_agent": "Alice",
-            "action_type": "@mention",
-            "target_user": "Bob",
-        })
-        with pytest.raises(ValueError, match="performer_instruction"):
-            parse_director_response(raw)
+            parse_action_response(raw)

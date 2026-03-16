@@ -24,16 +24,17 @@ def _minimal_sim() -> dict:
         "performer_llm_model": "gemini-pro",
         "moderator_llm_provider": "anthropic",
         "moderator_llm_model": "claude-3-haiku",
-        "context_window_size": 10,
+        "evaluate_interval": 10,
     }
 
 
 def _minimal_exp() -> dict:
     return {
         "chatroom_context": "Discuss topic X",
+        "ecological_validity_criteria": "Informal Reddit-like chatroom with short messages.",
         "groups": {
             "civil_support": {
-                "treatment": "Be civil and supportive",
+                "internal_validity_criteria": "Be civil and supportive",
                 "features": [],
             },
         },
@@ -80,7 +81,7 @@ class TestValidateSimulationConfig:
         "messages_per_minute", "director_llm_provider", "director_llm_model",
         "performer_llm_provider", "performer_llm_model",
         "moderator_llm_provider", "moderator_llm_model",
-        "context_window_size",
+        "evaluate_interval",
     ])
     def test_missing_required_key(self, missing_key):
         cfg = _minimal_sim()
@@ -150,8 +151,8 @@ class TestValidateSimulationConfig:
 
     def test_zero_context_window(self):
         cfg = _minimal_sim()
-        cfg["context_window_size"] = 0
-        with pytest.raises(ValueError, match="context_window_size"):
+        cfg["evaluate_interval"] = 0
+        with pytest.raises(ValueError, match="evaluate_interval"):
             config_repo.validate_simulation_config(cfg)
 
     def test_max_concurrent_agents_stripped(self):
@@ -200,24 +201,29 @@ class TestValidateExperimentalConfig:
     def test_no_groups(self):
         with pytest.raises(ValueError, match="treatment group"):
             config_repo.validate_experimental_config(
-                {"chatroom_context": "x", "groups": {}},
+                {"chatroom_context": "x", "ecological_validity_criteria": "realistic", "groups": {}},
                 available_features=[],
             )
 
-    def test_missing_treatment(self):
-        cfg = {"groups": {"g1": {"treatment": "", "features": []}}}
-        with pytest.raises(ValueError, match="missing a treatment"):
+    def test_missing_ecological_validity(self):
+        cfg = {"chatroom_context": "x", "groups": {"g1": {"internal_validity_criteria": "t", "features": []}}}
+        with pytest.raises(ValueError, match="ecological_validity_criteria"):
+            config_repo.validate_experimental_config(cfg, available_features=[])
+
+    def test_missing_internal_validity_criteria(self):
+        cfg = {"groups": {"g1": {"internal_validity_criteria": "", "features": []}}}
+        with pytest.raises(ValueError, match="missing an internal_validity_criteria"):
             config_repo.validate_experimental_config(cfg, available_features=[])
 
     def test_unknown_feature(self):
-        cfg = {"groups": {"g1": {"treatment": "be nice", "features": ["nonexistent"]}}}
+        cfg = {"groups": {"g1": {"internal_validity_criteria": "be nice", "features": ["nonexistent"]}}}
         with pytest.raises(ValueError, match="unknown feature"):
             config_repo.validate_experimental_config(
                 cfg, available_features=["news_article"]
             )
 
     def test_valid_feature(self):
-        cfg = {"groups": {"g1": {"treatment": "be nice", "features": ["news_article"]}}}
+        cfg = {"groups": {"g1": {"internal_validity_criteria": "be nice", "features": ["news_article"]}}}
         result = config_repo.validate_experimental_config(
             cfg, available_features=["news_article", "gate_until_user_post"]
         )
@@ -267,7 +273,7 @@ async def test_save_and_get_config(db_pool):
     result = await config_repo.get_experiment_config(db_pool, "exp_save_test")
     assert result is not None
     assert result["simulation"]["random_seed"] == 42
-    assert result["experimental"]["groups"]["civil_support"]["treatment"] == "Be civil and supportive"
+    assert result["experimental"]["groups"]["civil_support"]["internal_validity_criteria"] == "Be civil and supportive"
 
 
 async def test_save_duplicate_raises(db_pool):

@@ -59,7 +59,7 @@ class TestLogMethods:
 
         with patch.object(logger, "_async_insert", new_callable=AsyncMock) as mock_insert:
             logger.log_session_start(
-                experimental_config={"treatment": "A"},
+                experimental_config={"internal_validity_criteria": "A"},
                 simulation_config={"rate": 5},
                 treatment_group="group_a",
             )

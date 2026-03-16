@@ -71,13 +71,9 @@ class TestBuildModeratorSystemPrompt:
 
 class TestBuildModeratorUserPrompt:
     def test_injects_performer_output(self):
-        result = build_moderator_user_prompt("I think that's a great point!", "message")
+        result = build_moderator_user_prompt("I think that's a great point!")
         assert "I think that's a great point!" in result
 
-    def test_injects_action_type(self):
-        result = build_moderator_user_prompt("some output", "reply")
-        assert "reply" in result
-
     def test_returns_string(self):
-        result = build_moderator_user_prompt("output", "message")
+        result = build_moderator_user_prompt("output")
         assert isinstance(result, str)

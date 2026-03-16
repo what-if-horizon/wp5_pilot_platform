@@ -1,11 +1,10 @@
-"""Unit tests for agents/STAGE/performer.py — template parsing and prompt building."""
+"""Unit tests for agents/STAGE/performer.py — simplified prompt building."""
 from datetime import datetime, timezone
 
 from models.message import Message
 from agents.STAGE.performer import (
-    _parse_template,
-    _format_chat_log,
-    _format_instruction,
+    _format_target_message,
+    _resolve_performer_action_type,
     build_performer_user_prompt,
     build_performer_system_prompt,
 )
@@ -21,203 +20,156 @@ def _msg(sender="Alice", content="Hello", msg_id="m1", **kwargs):
     )
 
 
-# ── _parse_template ──────────────────────────────────────────────────────────
+# ── _resolve_performer_action_type ─────────────────────────────────────────
 
-class TestParseTemplate:
-    SAMPLE = (
-        "Preamble text\n\n"
-        "`{ACTION_TYPE_BLOCK: message}`\n"
-        "Message instructions here\n\n"
-        "`{ACTION_TYPE_BLOCK: reply}`\n"
-        "Reply instructions here\n\n"
-        "`{ACTION_TYPE_BLOCK: @mention}`\n"
-        "Mention instructions here\n\n"
-        "`{END_ACTION_TYPE_BLOCKS}`\n"
-        "\nPostamble text"
-    )
+class TestResolvePerformerActionType:
+    def test_message_without_target(self):
+        assert _resolve_performer_action_type("message", None) == "message"
 
-    def test_extracts_all_blocks(self):
-        _, blocks = _parse_template(self.SAMPLE)
-        assert "message" in blocks
-        assert "reply" in blocks
-        assert "@mention" in blocks
+    def test_message_with_target(self):
+        assert _resolve_performer_action_type("message", "Bob") == "message_targeted"
 
-    def test_block_content_correct(self):
-        _, blocks = _parse_template(self.SAMPLE)
-        assert "Message instructions" in blocks["message"]
-        assert "Reply instructions" in blocks["reply"]
-        assert "Mention instructions" in blocks["@mention"]
+    def test_reply_passthrough(self):
+        assert _resolve_performer_action_type("reply", None) == "reply"
 
-    def test_base_template_has_placeholder(self):
-        base, _ = _parse_template(self.SAMPLE)
-        assert "{ACTION_BLOCK}" in base
-        # Original block markers should be gone
-        assert "ACTION_TYPE_BLOCK" not in base
-
-    def test_preserves_surrounding_text(self):
-        base, _ = _parse_template(self.SAMPLE)
-        assert "Preamble text" in base
-        assert "Postamble text" in base
+    def test_mention_passthrough(self):
+        assert _resolve_performer_action_type("@mention", "Bob") == "@mention"
 
 
-# ── _format_chat_log ─────────────────────────────────────────────────────────
+# ── _format_target_message ─────────────────────────────────────────────────
 
-class TestFormatChatLog:
-    def test_empty(self):
-        assert _format_chat_log([]) == "(No messages yet)"
+class TestFormatTargetMessage:
+    def test_none_target(self):
+        result = _format_target_message(None)
+        assert "no target" in result.lower()
 
-    def test_single_message(self):
-        result = _format_chat_log([_msg()])
-        assert "Alice: Hello" in result
-
-    def test_liked_by_annotation(self):
-        msg = _msg(liked_by={"Bob"})
-        result = _format_chat_log([msg])
-        assert "[liked by Bob]" in result
-
-    def test_multiple_messages(self):
-        msgs = [_msg(sender="A", content="x"), _msg(sender="B", content="y")]
-        result = _format_chat_log(msgs)
-        lines = result.strip().split("\n")
-        assert len(lines) == 2
+    def test_with_target(self):
+        msg = _msg(sender="Bob", content="What do you think?")
+        result = _format_target_message(msg)
+        assert "Bob: What do you think?" in result
 
 
-# ── _format_instruction ─────────────────────────────────────────────────────
-
-class TestFormatInstruction:
-    def test_all_keys(self):
-        result = _format_instruction({
-            "objective": "say hi",
-            "motivation": "be friendly",
-            "directive": "casual tone",
-        })
-        assert "**Objective**: say hi" in result
-        assert "**Motivation**: be friendly" in result
-        assert "**Directive**: casual tone" in result
-
-    def test_partial_keys(self):
-        result = _format_instruction({"objective": "say hi"})
-        assert "**Objective**: say hi" in result
-        assert "Motivation" not in result
-
-    def test_empty_instruction(self):
-        result = _format_instruction({})
-        assert result == ""
-
-
-# ── build_performer_system_prompt ────────────────────────────────────────────
+# ── build_performer_system_prompt ──────────────────────────────────────────
 
 class TestBuildPerformerSystemPrompt:
-    def test_injects_chatroom_context(self):
-        result = build_performer_system_prompt(chatroom_context="Climate debate")
-        assert "Climate debate" in result
-
     def test_returns_string(self):
         result = build_performer_system_prompt()
         assert isinstance(result, str)
         assert len(result) > 0
 
+    def test_system_prompt_is_concise(self):
+        """System prompt contains role instruction only; chatroom context is in user prompt."""
+        result = build_performer_system_prompt(chatroom_context="Climate debate")
+        assert "chatroom" in result.lower()
+        # Chatroom context is in the {#USER} block, not the system prompt
+        assert "Climate debate" not in result
 
-# ── build_performer_user_prompt ──────────────────────────────────────────────
+
+# ── build_performer_user_prompt ────────────────────────────────────────────
 
 class TestBuildPerformerUserPrompt:
     def _instruction(self):
-        return {"objective": "greet everyone", "motivation": "warmth"}
+        return {"objective": "greet everyone", "motivation": "warmth", "directive": "be casual"}
 
-    def test_message_action(self):
+    def test_contains_individual_fields(self):
         result = build_performer_user_prompt(
             instruction=self._instruction(),
+            agent_profile="Friendly and active participant.",
             action_type="message",
-            messages=[_msg()],
         )
-        # Should contain the instruction
         assert "greet everyone" in result
-        # Should contain the chat log
-        assert "Alice: Hello" in result
+        assert "warmth" in result
+        assert "be casual" in result
 
-    def test_reply_action_injects_target(self):
-        target = _msg(sender="Bob", content="What do you think?", msg_id="target-1")
+    def test_contains_agent_profile(self):
         result = build_performer_user_prompt(
             instruction=self._instruction(),
-            action_type="reply",
-            messages=[target],
+            agent_profile="Has been sceptical throughout.",
+            action_type="message",
+        )
+        assert "Has been sceptical throughout." in result
+
+    def test_empty_profile_shows_placeholder(self):
+        result = build_performer_user_prompt(
+            instruction=self._instruction(),
+            agent_profile="",
+            action_type="message",
+        )
+        assert "first action" in result.lower()
+
+    def test_message_standalone(self):
+        result = build_performer_user_prompt(
+            instruction=self._instruction(),
+            agent_profile="Active user.",
+            action_type="message",
+        )
+        assert "not responding to anyone" in result.lower()
+
+    def test_message_targeted(self):
+        target = _msg(sender="Bob", content="Interesting point")
+        result = build_performer_user_prompt(
+            instruction=self._instruction(),
+            agent_profile="Active user.",
+            action_type="message",
+            target_user="Bob",
             target_message=target,
         )
-        assert "Bob: What do you think?" in result
-
-    def test_reply_without_target_shows_not_found(self):
-        result = build_performer_user_prompt(
-            instruction=self._instruction(),
-            action_type="reply",
-            messages=[_msg()],
-            target_message=None,
-        )
-        assert "(message not found)" in result
-
-    def test_mention_action_injects_target_user(self):
-        result = build_performer_user_prompt(
-            instruction=self._instruction(),
-            action_type="@mention",
-            messages=[_msg()],
-            target_user="Dave",
-        )
-        assert "Dave" in result
-
-    def test_mention_without_target_user_shows_unknown(self):
-        result = build_performer_user_prompt(
-            instruction=self._instruction(),
-            action_type="@mention",
-            messages=[_msg()],
-            target_user=None,
-        )
-        assert "(unknown)" in result
-
-    def test_message_targeted_uses_target_user(self):
-        msgs = [_msg(sender="Bob", content="I disagree")]
-        result = build_performer_user_prompt(
-            instruction=self._instruction(),
-            action_type="message",
-            messages=msgs,
-            target_user="Bob",
-        )
         assert "Bob" in result
+        assert "Interesting point" in result
 
-    def test_unknown_action_falls_back_to_message(self):
-        """Unknown action types fall back to the 'message' block."""
+    def test_reply_includes_target(self):
+        target = _msg(sender="Bob", content="Interesting point")
         result = build_performer_user_prompt(
             instruction=self._instruction(),
-            action_type="nonexistent_action",
-            messages=[_msg()],
+            agent_profile="Active user.",
+            action_type="reply",
+            target_message=target,
         )
-        # Should still produce a valid prompt (fell back to message block)
-        assert isinstance(result, str)
-        assert len(result) > 0
+        assert "Bob: Interesting point" in result
+        assert "quoted above" in result.lower()
 
-    def test_chatroom_context_injected(self):
-        # Context only appears in user prompt when duplicate_prompts is enabled
+    def test_mention_includes_target_user(self):
         result = build_performer_user_prompt(
             instruction=self._instruction(),
+            agent_profile="Active user.",
+            action_type="@mention",
+            target_user="Charlie",
+        )
+        assert "Charlie" in result
+        assert "@mention" in result.lower() or "directed at" in result.lower()
+
+    def test_chatroom_context_in_user_prompt(self):
+        result = build_performer_user_prompt(
+            instruction=self._instruction(),
+            agent_profile="",
             action_type="message",
-            messages=[],
             chatroom_context="Climate debate",
-            duplicate_prompts=True,
         )
         assert "Climate debate" in result
 
-    def test_chatroom_context_absent_when_not_duplicated(self):
-        # When duplicate_prompts=False (default), context is system-prompt-only
+    def test_renders_action_type_block(self):
         result = build_performer_user_prompt(
             instruction=self._instruction(),
-            action_type="message",
-            messages=[],
-            chatroom_context="Climate debate",
+            agent_profile="Active user.",
+            action_type="reply",
+            target_message=_msg(sender="Bob", content="Earlier message"),
+            chatroom_context="Test room",
         )
-        assert "Climate debate" not in result
+        # Should include the reply block content
+        assert "quoted above" in result.lower()
+        # Should NOT include other action type blocks
+        assert "not responding to anyone" not in result.lower()
 
-    def test_empty_messages(self):
+    def test_message_targeted_with_context(self):
         result = build_performer_user_prompt(
             instruction=self._instruction(),
+            agent_profile="Active user.",
             action_type="message",
-            messages=[],
+            target_user="Bob",
+            target_message=_msg(sender="Bob", content="Hey there"),
+            chatroom_context="Test room",
         )
-        assert "(No messages yet)" in result
+        assert "Bob" in result
+        assert "Hey there" in result
+        # Should NOT include standalone message block
+        assert "not responding to anyone" not in result.lower()

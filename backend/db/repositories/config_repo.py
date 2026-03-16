@@ -28,7 +28,7 @@ def validate_simulation_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "messages_per_minute", "director_llm_provider", "director_llm_model",
         "performer_llm_provider", "performer_llm_model",
         "moderator_llm_provider", "moderator_llm_model",
-        "context_window_size",
+        "evaluate_interval",
     ]
     for k in required:
         if k not in out:
@@ -90,12 +90,20 @@ def validate_simulation_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError(f"'{k}' must be > 0")
         out[k] = v
 
-    cws = int(out["context_window_size"])
+    cws = int(out["evaluate_interval"])
     if cws <= 0:
-        raise ValueError("'context_window_size' must be > 0")
-    out["context_window_size"] = cws
+        raise ValueError("'evaluate_interval' must be > 0")
+    out["evaluate_interval"] = cws
 
-    out["duplicate_prompts"] = bool(out.get("duplicate_prompts", False))
+    aws = int(out.get("action_window_size", 10))
+    if aws <= 0:
+        raise ValueError("'action_window_size' must be > 0")
+    out["action_window_size"] = aws
+
+    pms = int(out.get("performer_memory_size", 3))
+    if pms < 0:
+        raise ValueError("'performer_memory_size' must be >= 0")
+    out["performer_memory_size"] = pms
 
     return out
 
@@ -108,6 +116,11 @@ def validate_experimental_config(
 
     Raises ValueError on invalid input.
     """
+    # Ecological validity criteria — required for new experiments
+    evc = cfg.get("ecological_validity_criteria", "")
+    if isinstance(evc, str) and not evc.strip():
+        raise ValueError("'ecological_validity_criteria' is required")
+
     groups = cfg.get("groups", {})
     if not groups or not isinstance(groups, dict):
         raise ValueError("At least one treatment group is required")
@@ -115,8 +128,8 @@ def validate_experimental_config(
     for name, g in groups.items():
         if not isinstance(g, dict):
             raise ValueError(f"Group '{name}' must be a dict")
-        if not g.get("treatment", "").strip():
-            raise ValueError(f"Group '{name}' is missing a treatment description")
+        if not g.get("internal_validity_criteria", "").strip():
+            raise ValueError(f"Group '{name}' is missing an internal_validity_criteria description")
         for feat in g.get("features", []):
             if feat not in available_features:
                 raise ValueError(

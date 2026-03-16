@@ -4,22 +4,83 @@ This is a research platform for integrating AI agents into simulated social medi
 
 **Status**: Under active development for the [What-If](https://what-if-horizon.eu/) project by https://github.com/Rptkiddle.
 
+**[STAGE Framework](#stage-framework)** · **[Installation](#installation)** · **[Setup Wizard](#setup-wizard)** · **[Dashboard](#dashboard)** · **[API](#api-endpoints)** · **[Project Structure](#project-structure)**
+
 
 ## STAGE Framework
 
-The platform is powered by **STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments), a multi-agent framework that separates agent coordination from message generation.
+The platform is powered by **STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments), a multi-agent strategic coordination framework.
+
+### The problem STAGE addresses:
+
+In a participant-facing multi-agent chatroom experiment, the experimental stimulus is not a fixed input; it is the *conversation itself*, which emerges from the interactions of multiple agents and the human participant. The researcher cannot script this discourse in advance. It must unfold naturally, respond to whatever the human says, and still realise the intended experimental conditions. This makes the chatroom state dynamic and the stimulus fundamentally emergent.
+
+STAGE is a framework for *governing this emergence*. It gives the researcher two levers — **internal validity** criteria (what the experimental manipulation requires) and **ecological validity** criteria (what makes the experience feel realistic to the participant) — and uses a dedicated coordinating model (the Director) to steer every agent action toward both goals simultaneously. Message generation is handled by a separate model (the Performer) that can be optimised for natural online speech in the target language or domain, while all identities are anonymised so the Director cannot distinguish human from agent (both are treated as first-class).
+
+> **Cautionary note on emergent content:** Because the STAGE framework coordinates multiple generative models, the resulting chatroom discourse is emergent and cannot be fully predetermined. Responsibility for participant safety lies with the researcher, who must ensure appropriate informed consent, ethical approval, and active monitoring of study sessions. This is especially important when using unaligned, fine-tuned, or otherwise higher-risk models within the pipeline.
+
+### Roles
 
 | Role | Responsibility |
 |------|----------------|
-| **Director** | Reads the chatroom and decides *who speaks next*, *what kind of action to take*, and *who to address*. Balances two criteria: **internal validity** (is the conversation satisfying the treatment?) and **ecological validity** (would it look natural to a human?). Passes structured instructions — *Objective, Motivation, Directive* — to the Performer. |
-| **Performer** | Generates the actual chatroom message in the agent's voice, from the Director's instructions. Can be swapped or fine-tuned for domain- or language-specific online speech.|
-| **Moderator** | Quality gate that extracts clean message content from the Performer's raw output. If extraction fails, the Performer is retried (up to 3 attempts). |
+| **Director** | Behind-the-scenes coordinator that never produces visible messages. It maintains a model of each participant's behaviour, monitors the chatroom against researcher-defined validity criteria, and on each turn decides *who* should speak, *what kind* of action they should take, and *what* they should try to achieve. This is expressed as a structured instruction (Objective, Motivation, Directive). |
+| **Performer** | Generates the chatroom message. It receives the Director's O/M/D instruction, the participant's accumulated behavioural profile, their most recent messages, the relevant target message (if the action requires responding to one). This separation-of-concerns means the Performer can be swapped or fine-tuned for domain- or language-specific online speech, and multiple performers can be called on depending on the type of speech required. |
+| **Moderator** | Quality gate that extracts clean message content from the Performer's raw output, stripping any reasoning, meta-commentary, or formatting artefacts. If extraction fails, the Performer is retried (up to 3 attempts). |
 
-All models should be capable at instruction following. The director model should be a large, possibly reasoning model, as it is responsible for monitoring internal and ecological valicity criteria and directing the actions of agents accordingly. The performer model should be a smaller model with domain or language-specific pretraining or fine-tuning, permissive of more convincing online speech in the target domain/language. This seperation of concerns allows for specification of models better specialized for each of these tasks.
+### Validity criteria
 
-All identities (agents and participant) are replaced with shuffled anonymous labels (*"Member 1", "Member 2", ...*) before being sent to any LLM, preventing the model from distinguishing human from agent and eliminating name-associated bias. Participant display names are stored only in the browser on their device and never sent to the backend.
+The Director balances two researcher-defined criteria that shape every action decision:
 
-> ⚠️ **Cautionary note on emergent content:** Because the STAGE framework coordinates multiple generative models, the resulting chatroom discourse is emergent and cannot be fully predetermined. Responsibility for participant safety lies with the researcher, who must ensure appropriate informed consent, ethical approval, and active monitoring of study sessions. This is especially important when using unaligned, fine-tuned, or otherwise higher-risk models within the pipeline.
+- **Internal validity** — defined per treatment group (e.g. *"the chatroom should strike a mildly uncivil tone"*). Ensures the conversation satisfies the experimental manipulation.
+- **Ecological validity** — defined per experiment (e.g. *"messages should be short, informal, and dialogic"*). Ensures the conversation would look natural to a human participant.
+
+The Evaluate call (below) produces running assessments of both criteria, maintained by the Director.
+
+### Per-turn pipeline
+
+Each orchestrator turn runs the following sequence. The tick loop fires every second, with a configurable probability gate controlling how often a turn actually executes. For now, turns are sequential, meaning that only one agent can act at a time. All director reasoning for all decision-making is logged. 
+
+```
+ 1. Director Update     — revise last acting participant's behavioural profile
+                          (skipped on first turn; skipped for likes)
+ 2. Director Evaluate   — revise validity assessments against the recent
+                          chat log (every turn during warm-up, then every
+                          evaluate_interval turns as set by researcher)
+ 3. Director Action     — read validity evaluations + profiles + chat log →
+                          select performer, action type, target, write O/M/D
+ 4. Performer           — generate message from O/M/D + profile + target
+                          (skipped for likes)
+ 5. Moderator           — extract message content (retry up to 3×)
+```
+
+### Action types
+
+The Director selects one action per turn:
+
+| Action | Description |
+|--------|-------------|
+| `message` | A new message to the room. Can be a standalone contribution (`target_user` = null) or a response to a specific participant's most recent message (`target_user` = X). |
+| `reply` | Quote-reply to a specific earlier message — used to resurface something from further back in the conversation. |
+| `@mention` | Message directed at a participant who did not send the most recent message — used to draw them back into the conversation. |
+| `like` | Non-verbal endorsement of a message (no Performer call needed). |
+
+
+### Anonymization
+
+All identities (performers and participant) are replaced with shuffled anonymous labels (*"Performer 1", "Performer 2", ...*) before any LLM call, via a seeded shuffle that remains stable for the session. This prevents the Director from distinguishing the human from agents and eliminates name-associated bias. The human's display name is stored only in the browser and never sent to the backend — the backend knows the human only as `"participant"`, and the LLM knows them only as one of the numbered performers.
+
+### Model selection
+
+The Director, Performer, and Moderator each use independently configured LLM providers and models. The Director should be a capable instruction-following model (it reasons over validity criteria and makes multi-step decisions). The Performer can be a smaller or fine-tuned instruction-following model optimised for convincing online speech in the target language or domain. The Moderator needs only basic extraction capability. This separation allows each role to use the model best suited to its task.
+
+### Validation scripts
+
+A script in `backend/agents/STAGE/validation/` supports manual inspection of the pipeline:
+
+- **`validate_pipeline.py`** — steps through N turns of the full Director → Performer → Moderator pipeline, printing every LLM call's system prompt, user prompt, and response.
+
+Run by piping into the app container: `cat backend/agents/STAGE/validation/<script>.py | docker compose exec -T app python`
+
 
 ## Installation
 
@@ -69,22 +130,107 @@ Your server must have **ports 80 and 443 open** and the domain's DNS must point 
 
 All experiment configuration and monitoring is managed through the **Admin Panel** at `http://localhost:3000/admin`. 
 
-### Setup
+### Setup Wizard
 
 If no experiment is currently active, the admin panel will direct you to a setup wizard:
 
 ![Setup Wizard](https://github.com/user-attachments/assets/ab72014c-fe6e-4997-a92d-44aca71c1b7a)
 
-1. **Experiment Identity** — unique experiment ID and description
-2. **Session & Agents** — duration, agent settings, message pacing
-3. **LLM Pipeline** — Director, Performer, and Moderator model selection and testing
-4. **Treatment Groups** — chatroom context, treatment descriptions, composable features.
-5. **Participant Tokens** — auto-generate random single-use tokens with CSV download
-6. **Review & Save** — review all settings and save experiment to the database (as read-only)
+The wizard walks you through six steps. Once an experiment is saved, its configuration is **immutable** — to change settings you must create a new experiment.
 
-Once an experiment is saved, its configuration is locked in and cannot be changed.
+<details>
+<summary><b>Step 1: Experiment Identity</b></summary>
 
-You can pause and resume experiments, as well as reset or delete them, from the dashboard (see below).
+| Setting | Description |
+|---------|-------------|
+| **Experiment ID** | Unique identifier for this experiment (e.g. `pilot_2026_civility`). Used to isolate data in the database. |
+| **Description** | Free-text note for your own reference. |
+| **Starts At / Ends At** | Optional participation window — outside this window, tokens will be rejected. |
+| **Redirect URL** | Optional URL to send participants to after their session ends (e.g. a Qualtrics survey). If empty, a built-in thank-you page is shown. |
+
+</details>
+
+<details>
+<summary><b>Step 2: Session & Agents</b></summary>
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Duration** | 5 min | How long each session lasts before it ends automatically. |
+| **Number of Agents** | 5 | How many AI agents appear in the chatroom alongside the participant. |
+| **Agent Names** | — | Display names the participant sees (e.g. "Alex", "Sam"). Participant-facing only; the LLM pipeline uses anonymised labels. |
+| **Random Seed** | 42 | Controls the anonymised name shuffle and other randomised behaviour. Use the same seed for reproducibility. |
+
+**Pacing & pipeline settings:**
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Messages Per Minute** | 6 | Target upper bound for message frequency. The tick loop fires every second; this value controls the probability that a given tick triggers a turn. Actual throughput is also limited by LLM latency. |
+| **Validity Check Interval** | 5 | After the warm-up period, the Director's Evaluate call runs every *N* turns. During warm-up (the first *N* turns), it runs every turn. Higher values reduce LLM costs but make the Director less responsive to drift. |
+| **Action Window Size** | 5 | How many recent messages the Director sees in its Action and Evaluate calls. Larger windows give more context but increase token usage. |
+| **Performer Memory Size** | 3 | How many of the Performer's own recent messages are included in its prompt to help prevent repetition. Set to 0 to disable. |
+
+</details>
+
+<details>
+<summary><b>Step 3: LLM Pipeline</b></summary>
+
+Select a provider and model for each of the three STAGE roles. Available providers depend on which API keys are set in your `.env`. Each role has a **Test** button to verify the connection before proceeding.
+
+| Role | Responsibility | Model guidance |
+|------|----------------|----------------|
+| **Director** | Decides who speaks, selects the action type, and writes the structured instruction. | Needs strong instruction-following and reasoning (e.g. Claude Haiku, GPT-4o-mini). |
+| **Performer** | Generates the actual chatroom message. | Can be a smaller or fine-tuned model optimised for natural online speech in the target language or domain. |
+| **Moderator** | Extracts clean content from the Performer's raw output. | A fast, cheap model with low temperature works well. |
+
+Each role has independent settings for **provider**, **model**, **temperature**, **top-p**, and **max tokens**. Default generation parameters:
+
+|  | Director | Performer | Moderator |
+|--|----------|-----------|-----------|
+| Temperature | 0.8 | 0.8 | 0.2 |
+| Top-p | 0.8 | 0.8 | 1.0 |
+| Max tokens | 1024 | 256 | 256 |
+
+Some providers treat temperature and top-p as mutually exclusive — the wizard warns you if so.
+
+</details>
+
+<details>
+<summary><b>Step 4: Treatment Groups</b></summary>
+
+**Global context** (shared across all groups):
+
+| Setting | Description |
+|---------|-------------|
+| **Chatroom Context** | Description of the chatroom scenario injected into every prompt (e.g. *"A Telegram group chat about climate change policy"*). |
+| **Ecological Validity Criteria** | What "realistic" behaviour looks like. Guides the Director's Evaluate call (e.g. *"Messages should be short, informal, and include a mix of replies, mentions, and likes"*). |
+
+**Per-group settings** — each group defines one treatment condition:
+
+| Setting | Description |
+|---------|-------------|
+| **Group Name** | Identifier for the condition (e.g. `civil`, `uncivil`). Auto-sanitised to lowercase with underscores. |
+| **Internal Validity Criteria** | What the experimental manipulation requires for this condition. This is the key lever: the Director uses it to steer agent behaviour. Be precise (e.g. *"3 of the 5 agents should express climate-sceptical views; the remaining 2 should be climate-concerned"*). |
+| **Features** | Optional composable features: **News Article** (seeds the conversation with an article) and **Gate Until User Post** (agents wait for the participant to post first). |
+
+You can add groups manually or use the **2x2 Factorial Design Builder** to generate four groups from two dimensions (e.g. *civility* x *stance*).
+
+</details>
+
+<details>
+<summary><b>Step 5: Participant Tokens</b></summary>
+
+Generate single-use access codes, one per participant. Each token is pre-assigned to a treatment group, ensuring balanced enrollment. Download as **CSV** for distribution (e.g. embed in survey links).
+
+</details>
+
+<details>
+<summary><b>Step 6: Review & Save</b></summary>
+
+A read-only summary of all settings. Click **Save** to write the configuration to the database and activate the experiment — participants can immediately start joining with their tokens.
+
+To modify settings after saving, create a new experiment with a new ID. You can pause, reset, or delete experiments from the dashboard.
+
+</details>
 
 
 ### Dashboard

@@ -60,11 +60,12 @@ class SimulationSession:
         self.experimental_config = group_map[treatment_group]
         self.treatment_group = treatment_group
 
-        self.treatment = self.experimental_config.get("treatment", "")
-        if not self.treatment:
-            raise RuntimeError(f"treatment_group '{treatment_group}' has no 'treatment' description")
+        self.internal_validity_criteria = self.experimental_config.get("internal_validity_criteria", "")
+        if not self.internal_validity_criteria:
+            raise RuntimeError(f"treatment_group '{treatment_group}' has no 'internal_validity_criteria' description")
 
         self.chatroom_context = experimental_full.get("chatroom_context", "")
+        self.ecological_criteria = experimental_full.get("ecological_validity_criteria", "")
         self.redirect_url = experimental_full.get("redirect_url", "")
 
         # Create LLM managers for each pipeline stage
@@ -128,10 +129,12 @@ class SimulationSession:
             moderator_llm=self.moderator_llm,
             state=self.state,
             logger=self.logger,
-            context_window_size=int(self.simulation_config["context_window_size"]),
+            evaluate_interval=int(self.simulation_config["evaluate_interval"]),
+            action_window_size=int(self.simulation_config["action_window_size"]),
+            performer_memory_size=int(self.simulation_config["performer_memory_size"]),
             chatroom_context=self.chatroom_context,
+            ecological_criteria=self.ecological_criteria,
             rng=self._rng,
-            duplicate_prompts=bool(self.simulation_config.get("duplicate_prompts", False)),
         )
 
         self.features = load_features(self.experimental_config)
@@ -276,10 +279,10 @@ class SimulationSession:
             try:
                 await self._publish_typing(started=True)
                 result = await self.agent_manager.orchestrator.execute_turn(
-                    self.treatment,
+                    self.internal_validity_criteria,
                 )
 
-                if result is None:
+                if result is None or result.action_type == "wait":
                     return
 
                 # Apply realistic typing delay based on message length.

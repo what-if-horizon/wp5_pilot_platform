@@ -1,6 +1,6 @@
 import os
 import asyncio
-from mistralai import Mistral
+from mistralai.client import Mistral
 from dotenv import load_dotenv
 from typing import Optional
 

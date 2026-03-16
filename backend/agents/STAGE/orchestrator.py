@@ -1,12 +1,32 @@
-import re
+"""Orchestrator — coordinates the three-call Director + Performer + Moderator pipeline.
+
+Each turn:
+  1. (Skip on first turn) Director Update: update last agent's profile
+  2. Director Evaluate: assess validity criteria (every turn during warm-up,
+     then every evaluate_interval turns once the first full interval completes)
+  3. Director Action: select performer, action type, target, generate O/M/D
+     — If the Director selects the human participant, the turn short-circuits
+       here: Performer/Moderator are skipped, and the evaluate counter is
+       not advanced (wait turns are not productive).
+  4. Performer: generate message from agent profile + O/M/D + target message
+  5. Moderator: extract clean content (retry up to 3 times)
+
+Agent profiles accumulate over the session, updated by the Update call.
+All names are anonymized before LLM calls and deanonymized in the output.
+"""
 import random
+import re
 from copy import copy
 from dataclasses import dataclass
 from typing import Optional, List, Dict
 
 from models import Message, Agent
 from utils import Logger
-from agents.STAGE.director import build_director_system_prompt, build_director_user_prompt, parse_director_response
+from agents.STAGE.director import (
+    build_update_system_prompt, build_update_user_prompt, parse_update_response,
+    build_evaluate_system_prompt, build_evaluate_user_prompt, parse_evaluate_response,
+    build_action_system_prompt, build_action_user_prompt, parse_action_response,
+)
 from agents.STAGE.performer import build_performer_system_prompt, build_performer_user_prompt
 from agents.STAGE.moderator import build_moderator_system_prompt, build_moderator_user_prompt, parse_moderator_response
 
@@ -27,7 +47,9 @@ class TurnResult:
     message: Optional[Message] = None
     target_message_id: Optional[str] = None
     target_user: Optional[str] = None
-    director_reasoning: Optional[str] = None
+    priority: Optional[str] = None
+    performer_rationale: Optional[str] = None
+    action_rationale: Optional[str] = None
 
 
 # ── Anonymization helpers ────────────────────────────────────────────────────
@@ -35,12 +57,12 @@ class TurnResult:
 def build_name_map(agent_names: List[str], user_name: str, rng: random.Random) -> Dict[str, str]:
     """Build a shuffled mapping from real names to anonymous labels.
 
-    All participants (agents + human) are assigned "Member 1", "Member 2", …
+    All participants (agents + human) are assigned "Performer 1", "Performer 2", …
     in a random order so the LLM cannot distinguish the human from agents.
     """
     all_names = list(agent_names) + [user_name]
     rng.shuffle(all_names)
-    return {name: f"Member {i + 1}" for i, name in enumerate(all_names)}
+    return {name: f"Performer {i + 1}" for i, name in enumerate(all_names)}
 
 
 def anonymize_message(msg: Message, name_map: Dict[str, str]) -> Message:
@@ -48,18 +70,14 @@ def anonymize_message(msg: Message, name_map: Dict[str, str]) -> Message:
     anon = copy(msg)
     anon.sender = name_map.get(msg.sender, msg.sender)
 
-    # Anonymize @mentions in metadata
     if msg.mentions:
         anon.mentions = [name_map.get(m, m) for m in msg.mentions]
 
-    # Anonymize names in liked_by
     if msg.liked_by:
         anon.liked_by = {name_map.get(u, u) for u in msg.liked_by}
 
-    # Anonymize names embedded in content (e.g. "@Maria")
     anon.content = _replace_names_in_text(msg.content, name_map)
 
-    # Anonymize quoted text too
     if msg.quoted_text:
         anon.quoted_text = _replace_names_in_text(msg.quoted_text, name_map)
 
@@ -75,7 +93,6 @@ def _replace_names_in_text(text: str, name_map: Dict[str, str]) -> str:
     """Replace all occurrences of real names in text with their anonymous labels."""
     if not text:
         return text
-    # Sort by length descending so longer names are replaced first
     for real, anon in sorted(name_map.items(), key=lambda x: -len(x[0])):
         text = text.replace(real, anon)
     return text
@@ -87,14 +104,10 @@ def deanonymize_text(text: str, reverse_map: Dict[str, str]) -> str:
 
 
 class Orchestrator:
-    """Coordinates the Director->Performer->Moderator pipeline for each simulation turn.
+    """Coordinates the three-call Director + Performer + Moderator pipeline.
 
-    The Orchestrator is stateless with respect to conversation history; it
-    reads the current state each time `execute_turn` is called.
-
-    All names are anonymized before being sent to the LLMs and deanonymized
-    in the response, so the models cannot distinguish the human participant
-    from the AI agents.
+    Maintains agent profiles that accumulate over the session via the
+    Director's Update call. All names are anonymized before LLM calls.
     """
 
     def __init__(
@@ -104,19 +117,23 @@ class Orchestrator:
         moderator_llm,
         state,
         logger: Logger,
-        context_window_size: int = 10,
+        evaluate_interval: int = 5,
+        action_window_size: int = 10,
+        performer_memory_size: int = 3,
         chatroom_context: str = "",
+        ecological_criteria: str = "",
         rng: Optional[random.Random] = None,
-        duplicate_prompts: bool = False,
     ):
         self.director_llm = director_llm
         self.performer_llm = performer_llm
         self.moderator_llm = moderator_llm
         self.state = state
         self.logger = logger
-        self.context_window_size = context_window_size
+        self.evaluate_interval = evaluate_interval
+        self.action_window_size = action_window_size
+        self.performer_memory_size = performer_memory_size
         self.chatroom_context = chatroom_context
-        self._duplicate_prompts = duplicate_prompts
+        self.ecological_criteria = ecological_criteria
 
         # Build the shuffled name mapping (stable for the session lifetime).
         _rng = rng or random.Random()
@@ -125,82 +142,144 @@ class Orchestrator:
         self._reverse_map = {v: k for k, v in self._name_map.items()}
         self._anon_user = self._name_map[state.user_name]
 
-        # System prompts are cached (session-static data only).
-        # Performer/Moderator system prompts can be built immediately; Director
-        # needs treatment + human_user which arrive with the first execute_turn call.
+        # Performer profiles: keyed by anonymous name, values are free-form text.
+        # Includes both agents and the human — the Director treats all as equal performers.
+        # Start empty; accumulated via Director Update calls.
+        self.agent_profiles: Dict[str, str] = {
+            self._name_map[name]: "" for name in agent_names
+        }
+        self.agent_profiles[self._anon_user] = ""
+
+        # Track the last agent that acted (anonymous name) and their action type, for Update calls.
+        self._last_agent: Optional[str] = None
+        self._last_action_type: Optional[str] = None
+
+        # Running action counts for the Evaluate prompt.
+        self._action_counts: Dict[str, int] = {
+            "message": 0, "reply": 0, "@mention": 0, "like": 0,
+        }
+
+        # Per-performer action counts (keyed by anonymous name).
+        self._performer_counts: Dict[str, int] = {
+            self._name_map[name]: 0 for name in agent_names
+        }
+        self._performer_counts[self._anon_user] = 0
+
+        # Carry forward validity evaluations between turns.
+        self._internal_validity_summary: str = ""
+        self._ecological_validity_summary: str = ""
+
+        # Evaluate fires every evaluate_interval turns, so each call sees a
+        # full window of new messages.  Counter tracks turns since last evaluate.
+        # During warm-up (before the first full interval), evaluate fires every turn.
+        self._turns_since_evaluate: int = 0
+        self._has_completed_first_interval: bool = False
+
+        # Cached session-static system prompts.
+        self._update_system_prompt = build_update_system_prompt(
+            chatroom_context=chatroom_context,
+        )
         self._performer_system_prompt = build_performer_system_prompt(
             chatroom_context=chatroom_context,
         )
         self._moderator_system_prompt = build_moderator_system_prompt(
             chatroom_context=chatroom_context,
         )
-        self._director_system_prompt: Optional[str] = None
+        # Evaluate and Action system prompts deferred until first execute_turn (need internal_validity_criteria).
+        self._evaluate_system_prompt: Optional[str] = None
+        self._action_system_prompt: Optional[str] = None
 
     def _deanon_name(self, anon_name: str) -> str:
         """Map an anonymous label back to the real name."""
         return self._reverse_map.get(anon_name, anon_name)
 
-    async def execute_turn(self, treatment: str) -> Optional[TurnResult]:
-        """Run one full Director->Performer cycle.
+    async def execute_turn(self, internal_validity_criteria: str) -> Optional[TurnResult]:
+        """Run one full Update → Evaluate → Action → Performer → Moderator cycle.
 
         Returns a TurnResult on success, or None if the cycle fails.
         """
-        # 1. Gather recent messages and available agents, then anonymize
-        recent = self.state.get_recent_messages(self.context_window_size)
+        # 1. Gather recent messages, then anonymize.
+        #    Action and Evaluate use separate window sizes; Update and human
+        #    detection use the Action window (which contains the most recent message).
+        recent_action = self.state.get_recent_messages(self.action_window_size)
         agents = self.state.agents
 
-        anon_recent = [anonymize_message(m, self._name_map) for m in recent]
-        anon_agents = anonymize_agents(agents, self._name_map)
+        anon_recent_action = [anonymize_message(m, self._name_map) for m in recent_action]
 
-        # 2. Build and send the Director prompt (system + user)
-        if self._director_system_prompt is None:
-            self._director_system_prompt = build_director_system_prompt(
-                treatment=treatment,
-                human_user=self._anon_user,
-                chatroom_context=self.chatroom_context,
-            )
+        # 1b. Detect if the human posted since the last orchestrator turn.
+        #     If the most recent message is from the human, treat them as the
+        #     last-acting performer so their profile gets updated too.
+        if anon_recent_action and anon_recent_action[-1].sender == self._anon_user:
+            self._last_agent = self._anon_user
+            self._last_action_type = "message"
 
-        director_user_prompt = build_director_user_prompt(
-            treatment, anon_recent, anon_agents,
-            human_user=self._anon_user,
-            chatroom_context=self.chatroom_context,
-            duplicate_prompts=self._duplicate_prompts,
+        # 2. Director Update (skip on first turn — nothing to assess)
+        if anon_recent_action and self._last_agent:
+            # Skip Update for likes — they aren't significant enough for a profile revision.
+            if self._last_action_type != "like":
+                await self._director_update(anon_recent_action)
+
+        # 2b. Director Evaluate
+        #     Before the first full interval fires, evaluate every turn so the
+        #     Director has validity guidance from the very start.  Once the first
+        #     full window completes, switch to the regular cadence.
+        #     Save counter state so we can restore it if the Director yields (wait turn).
+        _saved_counter = self._turns_since_evaluate
+        _saved_first_interval = self._has_completed_first_interval
+        self._turns_since_evaluate += 1
+        should_evaluate = (
+            not self._has_completed_first_interval          # warm-up: every turn
+            or self._turns_since_evaluate >= self.evaluate_interval  # steady-state
         )
-        director_raw = None
-        try:
-            director_raw = await self.director_llm.generate_response(
-                director_user_prompt, max_retries=1,
-                system_prompt=self._director_system_prompt,
-            )
-        except Exception as e:
-            self.logger.log_error("director_llm_call", str(e))
+        if should_evaluate:
+            recent_eval = self.state.get_recent_messages(self.evaluate_interval)
+            anon_recent_eval = [anonymize_message(m, self._name_map) for m in recent_eval]
+            await self._director_evaluate(internal_validity_criteria, anon_recent_eval)
+            if self._turns_since_evaluate >= self.evaluate_interval:
+                self._has_completed_first_interval = True
+                self._turns_since_evaluate = 0
+
+        # 3. Director Action
+        #    The Director selects from all performers visible in profiles/chat log.
+        #    If it picks the human participant, the turn becomes a 'wait'.
+        action_data = await self._director_action(anon_recent_action)
+        if action_data is None:
             return None
 
-        # Log the Director call
-        self.logger.log_llm_call(
-            agent_name="__director__",
-            prompt=f"[SYSTEM]\n{self._director_system_prompt}\n\n[USER]\n{director_user_prompt}",
-            response=director_raw,
-            error=None if director_raw else "Director LLM returned no response",
-        )
-
-        if not director_raw:
-            return None
-
-        # 3. Parse the Director's JSON response and deanonymize names
-        try:
-            director_data = parse_director_response(director_raw)
-        except ValueError as e:
-            self.logger.log_error("director_parse", str(e))
-            return None
-
-        action_type = director_data["action_type"]
-        agent_name = self._deanon_name(director_data["next_agent"])
-        target_user = director_data.get("target_user")
+        action_type = action_data["action_type"]
+        agent_name = self._deanon_name(action_data["next_performer"])
+        target_user = action_data.get("target_user")
         if target_user:
             target_user = self._deanon_name(target_user)
-        target_message_id = director_data.get("target_message_id")
-        reasoning = director_data.get("reasoning")
+        target_message_id = action_data.get("target_message_id")
+        priority = action_data.get("priority")
+        performer_rationale = action_data.get("performer_rationale")
+        action_rationale = action_data.get("action_rationale")
+
+        # 3a. Fix self-mention: if Director told an agent to @mention itself,
+        #     downgrade to a regular message (no target_user).
+        if action_type == "@mention" and target_user and target_user == agent_name:
+            self.logger.log_error(
+                "director_self_mention",
+                f"Director told '{agent_name}' to @mention itself; converting to message",
+            )
+            action_type = "message"
+            action_data["action_type"] = "message"
+            target_user = None
+
+        # 3b. Handle 'wait' — Director selected the human participant.
+        #     Skip Performer/Moderator and restore evaluate counter
+        #     (wait turns are not productive turns).
+        if agent_name == self.state.user_name:
+            self._turns_since_evaluate = _saved_counter
+            self._has_completed_first_interval = _saved_first_interval
+            return TurnResult(
+                action_type="wait",
+                agent_name=agent_name,
+                priority=priority,
+                performer_rationale=performer_rationale,
+                action_rationale=action_rationale,
+            )
 
         # Validate that the chosen agent exists; fall back to a random valid agent.
         if not agents:
@@ -214,19 +293,60 @@ class Orchestrator:
             )
             agent_name = fallback
 
+        # Track last agent and action type for next turn's Update call (use anonymous name).
+        # Save previous values so we can restore on performer failure (silent skip).
+        _saved_last_agent = self._last_agent
+        _saved_last_action_type = self._last_action_type
+        self._last_agent = self._name_map.get(agent_name, action_data["next_performer"])
+        self._last_action_type = action_type
+
         # 4. Handle 'like' actions (no Performer call needed)
         if action_type == "like":
+            # Guard: skip duplicate likes (agent already liked this message).
+            if target_message_id:
+                target_msg = next(
+                    (m for m in self.state.messages if m.message_id == target_message_id),
+                    None,
+                )
+                if target_msg and agent_name in (target_msg.liked_by or set()):
+                    self.logger.log_error(
+                        "director_duplicate_like",
+                        f"'{agent_name}' already liked message {target_message_id}; skipping as wait",
+                    )
+                    self._turns_since_evaluate = _saved_counter
+                    self._has_completed_first_interval = _saved_first_interval
+                    self._last_agent = _saved_last_agent
+                    self._last_action_type = _saved_last_action_type
+                    return TurnResult(
+                        action_type="wait",
+                        agent_name=agent_name,
+                        priority=priority,
+                        performer_rationale=performer_rationale,
+                        action_rationale=action_rationale,
+                    )
+
+            self._action_counts["like"] += 1
+            anon_name = self._name_map.get(agent_name, agent_name)
+            self._performer_counts[anon_name] = self._performer_counts.get(anon_name, 0) + 1
             return TurnResult(
                 action_type="like",
                 agent_name=agent_name,
                 target_message_id=target_message_id,
-                director_reasoning=reasoning,
+                priority=priority,
+                performer_rationale=performer_rationale,
+                action_rationale=action_rationale,
             )
 
-        # 5. Performer -> Moderator loop (max MAX_PERFORMER_RETRIES attempts)
-        performer_instruction = director_data.get("performer_instruction", {})
+        # 5. Performer → Moderator loop (max MAX_PERFORMER_RETRIES attempts)
+        performer_instruction = action_data.get("performer_instruction", {})
 
-        # Look up target message if needed (for reply), and prepare an anon copy
+        # Get the selected agent's profile (in anonymous space)
+        anon_agent_name = self._name_map.get(agent_name, agent_name)
+        agent_profile = self.agent_profiles.get(anon_agent_name, "")
+
+        # Look up target message if needed, and prepare an anon copy.
+        # For 'message' with a target_user (targeted response), find the
+        # target user's most recent message so the Performer has context.
         target_message = None
         anon_target_message = None
         if target_message_id:
@@ -234,20 +354,39 @@ class Orchestrator:
                 (m for m in self.state.messages if m.message_id == target_message_id),
                 None,
             )
-            if target_message:
-                anon_target_message = anonymize_message(target_message, self._name_map)
+        elif action_type == "message" and target_user:
+            # Director chose a targeted message but no explicit message_id —
+            # resolve the target user's most recent message.
+            for m in reversed(self.state.messages):
+                if m.sender == target_user:
+                    target_message = m
+                    break
+        if target_message:
+            anon_target_message = anonymize_message(target_message, self._name_map)
 
-        # Anonymize target_user for the performer prompt
-        anon_target_user = self._name_map.get(target_user, target_user) if target_user else None
+        # Resolve anonymous target_user for the performer prompt
+        anon_target_user = None
+        if target_user:
+            anon_target_user = self._name_map.get(target_user, target_user)
+
+        # Gather this performer's recent messages (anonymized) so it can avoid repetition.
+        anon_recent_by_agent = []
+        if self.performer_memory_size > 0:
+            for m in reversed(self.state.messages):
+                if m.sender == agent_name:
+                    anon_recent_by_agent.append(anonymize_message(m, self._name_map))
+                    if len(anon_recent_by_agent) >= self.performer_memory_size:
+                        break
+            anon_recent_by_agent.reverse()
 
         performer_user_prompt = build_performer_user_prompt(
             instruction=performer_instruction,
+            agent_profile=agent_profile,
             action_type=action_type,
-            messages=anon_recent,
-            target_message=anon_target_message,
             target_user=anon_target_user,
+            target_message=anon_target_message,
+            recent_messages=anon_recent_by_agent,
             chatroom_context=self.chatroom_context,
-            duplicate_prompts=self._duplicate_prompts,
         )
 
         content = None
@@ -276,7 +415,6 @@ class Orchestrator:
             # 5b. Call the Moderator to extract clean content
             moderator_user_prompt = build_moderator_user_prompt(
                 performer_output=performer_raw,
-                action_type=action_type,
             )
 
             moderator_raw = None
@@ -310,14 +448,34 @@ class Orchestrator:
                 "performer_retries_exhausted",
                 f"Failed to get valid performer content after {MAX_PERFORMER_RETRIES} attempts",
             )
-            return None
+            # Treat exhausted retries like a wait turn: restore evaluate
+            # counter and clear last-agent so the failed turn is invisible
+            # to subsequent Director calls.
+            self._turns_since_evaluate = _saved_counter
+            self._has_completed_first_interval = _saved_first_interval
+            self._last_agent = _saved_last_agent
+            self._last_action_type = _saved_last_action_type
+            return TurnResult(
+                action_type="wait",
+                agent_name=agent_name,
+                priority=priority,
+                performer_rationale=performer_rationale,
+                action_rationale=action_rationale,
+            )
 
         # 6. Deanonymize any anonymous labels in the generated content.
         content = deanonymize_text(content, self._reverse_map)
 
-        # 7. Format the output into a Message
+        # 6b. Strip any @mention prefix the Performer included — the
+        #     Orchestrator adds it canonically below, so duplicates must go.
+        if action_type == "@mention" and target_user:
+            content = re.sub(
+                r"^@?" + re.escape(target_user) + r"\s*",
+                "",
+                content,
+            ).strip()
 
-        # For @mention actions, prepend the @mention to the message
+        # 7. Format the output into a Message
         mentions = None
         reply_to = None
         quoted_text = None
@@ -338,11 +496,182 @@ class Orchestrator:
             mentions=mentions,
         )
 
+        self._action_counts[action_type] = self._action_counts.get(action_type, 0) + 1
+        anon_name = self._name_map.get(agent_name, agent_name)
+        self._performer_counts[anon_name] = self._performer_counts.get(anon_name, 0) + 1
+
         return TurnResult(
             action_type=action_type,
             agent_name=agent_name,
             message=message,
             target_message_id=target_message_id,
             target_user=target_user,
-            director_reasoning=reasoning,
+            priority=priority,
+            performer_rationale=performer_rationale,
+            action_rationale=action_rationale,
         )
+
+    # ── Director Update (Call 1) ──────────────────────────────────────────────
+
+    async def _director_update(self, anon_recent: List[Message]) -> None:
+        """Run Director Update call: update last agent's profile.
+
+        Updates agent profile in place. On failure, carries forward unchanged.
+        """
+        last_agent_profile = self.agent_profiles.get(self._last_agent, "")
+
+        # Find the most recent message by the last-acting agent.
+        last_action = None
+        for msg in reversed(anon_recent):
+            if msg.sender == self._last_agent:
+                last_action = msg
+                break
+
+        update_user = build_update_user_prompt(
+            last_action=last_action,
+            last_agent=self._last_agent or "",
+            last_agent_profile=last_agent_profile,
+            chatroom_context=self.chatroom_context,
+        )
+
+        update_raw = None
+        try:
+            update_raw = await self.director_llm.generate_response(
+                update_user, max_retries=1,
+                system_prompt=self._update_system_prompt,
+            )
+        except Exception as e:
+            self.logger.log_error("director_update_llm_call", str(e))
+            return
+
+        self.logger.log_llm_call(
+            agent_name="__director_update__",
+            prompt=f"[SYSTEM]\n{self._update_system_prompt}\n\n[USER]\n{update_user}",
+            response=update_raw,
+            error=None if update_raw else "Director Update LLM returned no response",
+        )
+
+        if not update_raw:
+            return
+
+        try:
+            update_data = parse_update_response(update_raw)
+        except ValueError as e:
+            self.logger.log_error("director_update_parse", str(e))
+            return
+
+        # Update the last-acting agent's profile
+        if self._last_agent and self._last_agent in self.agent_profiles:
+            self.agent_profiles[self._last_agent] = update_data["performer_profile_update"]
+
+    # ── Director Evaluate (Call 2) ────────────────────────────────────────────
+
+    async def _director_evaluate(self, internal_validity_criteria: str, anon_recent: List[Message]) -> None:
+        """Run Director Evaluate call: revise validity evaluations.
+
+        Updates validity evaluations in place. On failure, carries forward unchanged.
+        """
+        # Cache Evaluate system prompt (session-static once criteria are known)
+        if self._evaluate_system_prompt is None:
+            self._evaluate_system_prompt = build_evaluate_system_prompt(
+                internal_validity_criteria=internal_validity_criteria,
+                ecological_criteria=self.ecological_criteria,
+                chatroom_context=self.chatroom_context,
+            )
+
+        evaluate_user = build_evaluate_user_prompt(
+            messages=anon_recent,
+            previous_internal=self._internal_validity_summary,
+            previous_ecological=self._ecological_validity_summary,
+            internal_validity_criteria=internal_validity_criteria,
+            ecological_criteria=self.ecological_criteria,
+            chatroom_context=self.chatroom_context,
+            action_counts=self._action_counts,
+            performer_counts=self._performer_counts,
+            exclude_performer=self._anon_user,
+        )
+
+        evaluate_raw = None
+        try:
+            evaluate_raw = await self.director_llm.generate_response(
+                evaluate_user, max_retries=1,
+                system_prompt=self._evaluate_system_prompt,
+            )
+        except Exception as e:
+            self.logger.log_error("director_evaluate_llm_call", str(e))
+            return
+
+        self.logger.log_llm_call(
+            agent_name="__director_evaluate__",
+            prompt=f"[SYSTEM]\n{self._evaluate_system_prompt}\n\n[USER]\n{evaluate_user}",
+            response=evaluate_raw,
+            error=None if evaluate_raw else "Director Evaluate LLM returned no response",
+        )
+
+        if not evaluate_raw:
+            return
+
+        try:
+            evaluate_data = parse_evaluate_response(evaluate_raw)
+        except ValueError as e:
+            self.logger.log_error("director_evaluate_parse", str(e))
+            return
+
+        # Update validity evaluations
+        self._internal_validity_summary = evaluate_data["internal_validity_evaluation"]
+        self._ecological_validity_summary = evaluate_data["ecological_validity_evaluation"]
+
+    # ── Director Action (Call 3) ──────────────────────────────────────────────
+
+    async def _director_action(
+        self, anon_recent: List[Message],
+    ) -> Optional[dict]:
+        """Run Director Action call: select performer, action type, O/M/D.
+
+        The Director selects from all performers visible in profiles and
+        chat log.  If it picks the human participant, the orchestrator
+        will treat this as a 'wait' (handled by the caller).
+
+        Returns parsed action response dict, or None on failure.
+        """
+        # Cache Action system prompt (session-static)
+        if self._action_system_prompt is None:
+            self._action_system_prompt = build_action_system_prompt(
+                chatroom_context=self.chatroom_context,
+            )
+
+        action_user = build_action_user_prompt(
+            messages=anon_recent,
+            agent_profiles=self.agent_profiles,
+            internal_validity_summary=self._internal_validity_summary or "No actions have occurred yet. No assessment available.",
+            ecological_validity_summary=self._ecological_validity_summary or "No actions have occurred yet. No assessment available.",
+            chatroom_context=self.chatroom_context,
+            performer_counts=self._performer_counts,
+            exclude_performer=self._anon_user,
+        )
+
+        action_raw = None
+        try:
+            action_raw = await self.director_llm.generate_response(
+                action_user, max_retries=1,
+                system_prompt=self._action_system_prompt,
+            )
+        except Exception as e:
+            self.logger.log_error("director_action_llm_call", str(e))
+            return None
+
+        self.logger.log_llm_call(
+            agent_name="__director_action__",
+            prompt=f"[SYSTEM]\n{self._action_system_prompt}\n\n[USER]\n{action_user}",
+            response=action_raw,
+            error=None if action_raw else "Director Action LLM returned no response",
+        )
+
+        if not action_raw:
+            return None
+
+        try:
+            return parse_action_response(action_raw)
+        except ValueError as e:
+            self.logger.log_error("director_action_parse", str(e))
+            return None

@@ -1,17 +1,29 @@
+"""Director module — three-call pipeline: Update → Evaluate → Action.
+
+The Director is split into three LLM calls per turn:
+  1. Update    — update the last-acting performer's profile
+  2. Evaluate  — evaluate conversation against validity criteria
+  3. Action    — select performer, action type, target, and generate O/M/D instruction
+
+All three calls use the same director_llm manager with different prompt templates.
+"""
 import json
 import re
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional
 
 from models import Message, Agent
-
-
-# Load unified Director prompt template at import time
-_PROMPTS_DIR = Path(__file__).parent / "prompts"
-_UNIFIED_TEMPLATE = (_PROMPTS_DIR / "director_prompt.md").read_text(encoding="utf-8")
-
 from agents.STAGE.prompts.prompt_renderer import render as _render_prompt
 
+
+# Load unified templates at import time
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+_UPDATE_TEMPLATE = (_PROMPTS_DIR / "director_update_prompt.md").read_text(encoding="utf-8")
+_EVALUATE_TEMPLATE = (_PROMPTS_DIR / "director_evaluate_prompt.md").read_text(encoding="utf-8")
+_ACTION_TEMPLATE = (_PROMPTS_DIR / "director_action_prompt.md").read_text(encoding="utf-8")
+
+
+# ── Chat log formatting ─────────────────────────────────────────────────────
 
 def format_chat_log(messages: List[Message]) -> str:
     """Format messages into a chat log string the Director can reason over.
@@ -24,7 +36,6 @@ def format_chat_log(messages: List[Message]) -> str:
 
     lines = []
     for m in messages:
-        # Build metadata annotations
         meta = []
         if m.reply_to:
             meta.append(f"replying to {m.reply_to}")
@@ -39,73 +50,248 @@ def format_chat_log(messages: List[Message]) -> str:
     return "\n".join(lines)
 
 
-def build_director_system_prompt(treatment: str, human_user: str = "participant", chatroom_context: str = "") -> str:
-    """Build the Director system prompt with session-static data only.
+def format_agent_profiles(profiles: Dict[str, str]) -> str:
+    """Format performer profiles dict into a readable string for prompts."""
+    if not profiles:
+        return "(No performer profiles yet — this is the start of the session.)"
 
-    Per-turn dynamic data (chat log, available agents) is left as
-    placeholder notes — those sections will be filled in the user prompt.
-    """
-    prompt = _render_prompt(_UNIFIED_TEMPLATE, "system")
+    lines = []
+    for name, profile in profiles.items():
+        if profile:
+            lines.append(f"**{name}**: {profile}")
+        else:
+            lines.append(f"**{name}**: (This performer has not acted yet.)")
+    return "\n\n".join(lines)
+
+
+# ── Update prompts (Call 1) ─────────────────────────────────────────────────
+
+def build_update_system_prompt(chatroom_context: str = "") -> str:
+    """Build the Director Update system prompt (session-static)."""
+    prompt = _render_prompt(_UPDATE_TEMPLATE, "system")
     prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
-    prompt = prompt.replace("{TREATMENT GOES HERE}", treatment)
-    prompt = prompt.replace("{HUMAN_USER}", human_user)
     return prompt
 
 
-def build_director_user_prompt(
-    treatment: str,
-    messages: List[Message],
-    agents: List[Agent],
-    human_user: str = "participant",
+def format_last_action(message: Optional[Message]) -> str:
+    """Format a single message as the last performer's action.
+
+    Returns a one-line summary suitable for the Director Update prompt.
+    """
+    if message is None:
+        return "(No action to display)"
+
+    meta = []
+    if message.reply_to:
+        meta.append(f"replying to {message.reply_to}")
+    if message.mentions:
+        meta.append(f"@mentions {', '.join(message.mentions)}")
+
+    meta_str = f" ({'; '.join(meta)})" if meta else ""
+    return f"[{message.message_id}] {message.sender}{meta_str}: {message.content}"
+
+
+def build_update_user_prompt(
+    last_action: Optional[Message],
+    last_agent: str = "",
+    last_agent_profile: str = "",
     chatroom_context: str = "",
-    duplicate_prompts: bool = False,
 ) -> str:
-    """Build the Director user prompt.
+    """Build the Director Update user prompt with dynamic data."""
+    action_str = format_last_action(last_action)
+    profile_str = last_agent_profile or "(This performer has not acted yet.)"
 
-    When *duplicate_prompts* is True (belt-and-braces mode), the full
-    template instructions are repeated in the user message alongside the
-    dynamic data. When False (default), only the dynamic data is sent.
-    """
-    chat_log = format_chat_log(messages)
-    agent_names = ", ".join(a.name for a in agents)
-
-    if duplicate_prompts:
-        prompt = _render_prompt(_UNIFIED_TEMPLATE, "user")
-        prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
-        prompt = prompt.replace("{TREATMENT GOES HERE}", treatment)
-        prompt = prompt.replace("{CHAT LOG GOES HERE}", chat_log)
-        prompt = prompt.replace("{HUMAN_USER}", human_user)
-        prompt += f"\n\n## Available Agents\n\n{agent_names}\n"
-    else:
-        prompt = f"## Chat Log\n\n{chat_log}\n\n## Available Agents\n\n{agent_names}\n"
+    prompt = _render_prompt(_UPDATE_TEMPLATE, "user")
+    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
+    prompt = prompt.replace("{LAST_AGENT}", last_agent)
+    prompt = prompt.replace("{LAST_AGENT_PROFILE}", profile_str)
+    prompt = prompt.replace("{LAST_ACTION}", action_str)
 
     return prompt
 
 
-# Backwards compatibility alias
-build_director_prompt = build_director_user_prompt
+def parse_update_response(raw: str) -> dict:
+    """Extract and validate the JSON from the Director's Update response.
 
-
-def parse_director_response(raw: str) -> dict:
-    """Extract and validate the JSON object from the Director's response.
-
-    The Director is expected to return a JSON object (possibly wrapped in
-    markdown fences). This function extracts and validates the required fields.
+    Returns dict with key: performer_profile_update
     """
-    # Try to extract JSON from markdown code fence first
     fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", raw, re.DOTALL)
     json_str = fence_match.group(1).strip() if fence_match else raw.strip()
 
     try:
         data = json.loads(json_str)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Director response is not valid JSON: {e}\nRaw: {raw[:500]}")
+        raise ValueError(f"Director Update response is not valid JSON: {e}\nRaw: {raw[:500]}")
+
+    if "performer_profile_update" not in data:
+        raise ValueError("Director Update response missing 'performer_profile_update'")
+
+    return data
+
+
+# ── Evaluate prompts (Call 2) ───────────────────────────────────────────────
+
+def build_evaluate_system_prompt(
+    internal_validity_criteria: str,
+    ecological_criteria: str,
+    chatroom_context: str = "",
+) -> str:
+    """Build the Director Evaluate system prompt (session-static)."""
+    prompt = _render_prompt(_EVALUATE_TEMPLATE, "system")
+    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
+    prompt = prompt.replace("{INTERNAL_VALIDITY_CRITERIA}", internal_validity_criteria)
+    prompt = prompt.replace("{ECOLOGICAL_VALIDITY_CRITERIA}", ecological_criteria)
+    return prompt
+
+
+def format_participation_summary(
+    performer_counts: Dict[str, int],
+    exclude_performer: Optional[str] = None,
+) -> str:
+    """Format per-performer action counts into a summary string.
+
+    Optionally excludes a performer (e.g. the human participant) so the
+    Director is not pressured to select them for equal-participation goals.
+    """
+    if not performer_counts:
+        return "(No participation yet)"
+
+    filtered = {k: v for k, v in performer_counts.items() if k != exclude_performer}
+    total = sum(filtered.values())
+    if total == 0:
+        return "(No actions yet)"
+
+    parts = []
+    for name in sorted(filtered.keys()):
+        count = filtered[name]
+        parts.append(f"{name}: {count} actions")
+    return ", ".join(parts)
+
+
+def format_action_summary(action_counts: Dict[str, int]) -> str:
+    """Format running action counts into a concise summary string."""
+    total = sum(action_counts.values())
+    if total == 0:
+        return "(No actions yet)"
+
+    parts = []
+    for action_type in ["message", "reply", "@mention", "like"]:
+        count = action_counts.get(action_type, 0)
+        pct = round(100 * count / total) if total else 0
+        parts.append(f"{count} {action_type} ({pct}%)")
+    return f"{total} actions so far: {', '.join(parts)}"
+
+
+def build_evaluate_user_prompt(
+    messages: List[Message],
+    previous_internal: str = "",
+    previous_ecological: str = "",
+    internal_validity_criteria: str = "",
+    ecological_criteria: str = "",
+    chatroom_context: str = "",
+    action_counts: Optional[Dict[str, int]] = None,
+    performer_counts: Optional[Dict[str, int]] = None,
+    exclude_performer: Optional[str] = None,
+) -> str:
+    """Build the Director Evaluate user prompt with dynamic data."""
+    chat_log = format_chat_log(messages)
+    prev_internal = previous_internal or "No actions have occurred yet. No assessment available."
+    prev_ecological = previous_ecological or "No actions have occurred yet. No assessment available."
+    action_summary = format_action_summary(action_counts) if action_counts else "(No actions yet)"
+    participation_summary = format_participation_summary(performer_counts, exclude_performer=exclude_performer) if performer_counts else "(No actions yet)"
+
+    prompt = _render_prompt(_EVALUATE_TEMPLATE, "user")
+    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
+    prompt = prompt.replace("{INTERNAL_VALIDITY_CRITERIA}", internal_validity_criteria)
+    prompt = prompt.replace("{ECOLOGICAL_VALIDITY_CRITERIA}", ecological_criteria)
+    prompt = prompt.replace("{PREVIOUS_INTERNAL_VALIDITY_EVALUATION}", prev_internal)
+    prompt = prompt.replace("{PREVIOUS_ECOLOGICAL_VALIDITY_EVALUATION}", prev_ecological)
+    prompt = prompt.replace("{ACTION_SUMMARY}", action_summary)
+    prompt = prompt.replace("{PARTICIPATION_SUMMARY}", participation_summary)
+    prompt = prompt.replace("{RECENT_CHAT_LOG}", chat_log)
+
+    return prompt
+
+
+def parse_evaluate_response(raw: str) -> dict:
+    """Extract and validate the JSON from the Director's Evaluate response.
+
+    Returns dict with keys: internal_validity_evaluation, ecological_validity_evaluation
+    """
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", raw, re.DOTALL)
+    json_str = fence_match.group(1).strip() if fence_match else raw.strip()
+
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Director Evaluate response is not valid JSON: {e}\nRaw: {raw[:500]}")
+
+    required = ["internal_validity_evaluation", "ecological_validity_evaluation"]
+    for key in required:
+        if key not in data:
+            raise ValueError(f"Director Evaluate response missing '{key}'")
+
+    return data
+
+
+# ── Action prompts (Call 3) ─────────────────────────────────────────────────
+
+def build_action_system_prompt(chatroom_context: str = "") -> str:
+    """Build the Director Action system prompt (session-static).
+
+    The Action call does NOT receive raw validity criteria —
+    it receives the evaluations from Call 2 instead.
+    """
+    prompt = _render_prompt(_ACTION_TEMPLATE, "system")
+    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
+    return prompt
+
+
+def build_action_user_prompt(
+    messages: List[Message],
+    agent_profiles: Dict[str, str],
+    internal_validity_summary: str,
+    ecological_validity_summary: str,
+    chatroom_context: str = "",
+    performer_counts: Optional[Dict[str, int]] = None,
+    exclude_performer: Optional[str] = None,
+) -> str:
+    """Build the Director Action user prompt with dynamic data."""
+    chat_log = format_chat_log(messages)
+    profiles_str = format_agent_profiles(agent_profiles)
+    participation_summary = format_participation_summary(performer_counts, exclude_performer=exclude_performer) if performer_counts else "(No actions yet)"
+
+    prompt = _render_prompt(_ACTION_TEMPLATE, "user")
+    prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
+    prompt = prompt.replace("{INTERNAL_VALIDITY_SUMMARY}", internal_validity_summary)
+    prompt = prompt.replace("{ECOLOGICAL_VALIDITY_SUMMARY}", ecological_validity_summary)
+    prompt = prompt.replace("{AGENT_PROFILES}", profiles_str)
+    prompt = prompt.replace("{PARTICIPATION_SUMMARY}", participation_summary)
+    prompt = prompt.replace("{CHAT_LOG}", chat_log)
+
+    return prompt
+
+
+def parse_action_response(raw: str) -> dict:
+    """Extract and validate the JSON from the Director's Action response.
+
+    Returns dict with standard Director output fields:
+        next_performer, action_type, target_user, target_message_id, performer_instruction,
+        priority, performer_rationale, action_rationale
+    """
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", raw, re.DOTALL)
+    json_str = fence_match.group(1).strip() if fence_match else raw.strip()
+
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Director Action response is not valid JSON: {e}\nRaw: {raw[:500]}")
 
     # Validate required fields
-    if "next_agent" not in data:
-        raise ValueError("Director response missing 'next_agent'")
+    if "next_performer" not in data:
+        raise ValueError("Director Action response missing 'next_performer'")
     if "action_type" not in data:
-        raise ValueError("Director response missing 'action_type'")
+        raise ValueError("Director Action response missing 'action_type'")
 
     action_type = data["action_type"]
     valid_types = {"message", "reply", "@mention", "like"}
@@ -121,7 +307,14 @@ def parse_director_response(raw: str) -> dict:
         raise ValueError("Director chose '@mention' but did not provide 'target_user'")
 
     # Validate performer_instruction for non-like actions
-    if action_type != "like" and not data.get("performer_instruction"):
-        raise ValueError(f"Director chose '{action_type}' but did not provide 'performer_instruction'")
+    if action_type != "like":
+        pi = data.get("performer_instruction")
+        if not pi:
+            raise ValueError(f"Director chose '{action_type}' but did not provide 'performer_instruction'")
+        if not isinstance(pi, dict):
+            raise ValueError(f"performer_instruction must be a dict, got {type(pi).__name__}")
+        missing = {"objective", "motivation", "directive"} - pi.keys()
+        if missing:
+            raise ValueError(f"performer_instruction missing keys: {missing}")
 
     return data

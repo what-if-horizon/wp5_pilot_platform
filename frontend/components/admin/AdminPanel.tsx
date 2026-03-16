@@ -35,9 +35,9 @@ const DEFAULT_SIMULATION: SimulationConfig = {
   director_llm_model: "claude-haiku-4-5",
   director_temperature: 0.8,
   director_top_p: 0.8,
-  director_max_tokens: 512,
-  performer_llm_provider: "anthropic",
-  performer_llm_model: "claude-haiku-4-5",
+  director_max_tokens: 1024,
+  performer_llm_provider: "mistral",
+  performer_llm_model: "mistral-large-latest",
   performer_temperature: 0.8,
   performer_top_p: 0.8,
   performer_max_tokens: 256,
@@ -46,15 +46,17 @@ const DEFAULT_SIMULATION: SimulationConfig = {
   moderator_temperature: 0.2,
   moderator_top_p: 1.0,
   moderator_max_tokens: 256,
-  context_window_size: 10,
-  duplicate_prompts: false,
+  evaluate_interval: 5,
+  action_window_size: 5,
+  performer_memory_size: 3,
 }
 
 const DEFAULT_EXPERIMENTAL: ExperimentalConfig = {
   chatroom_context: "",
+  ecological_validity_criteria: "The conversation should be dialogic: agents should react to the state of the conversation, rather than talking past each other. There should be a mix of action types: approx. 30% message, 30% likes, 20% replies, 20% @mentions. Messages must be short (1-2 sentences, under 30 words) — brief, punchy contributions like in a real group chat. Tone and style should vary, with some containing emojis or punctuation. Messages should be 'reddit-like': informal, self-aware, and sometimes include internet humour, slang, and abbreviations.",
   redirect_url: "",
   groups: {
-    condition_1: { features: [], treatment: "" },
+    condition_1: { features: [], internal_validity_criteria: "" },
   },
 }
 
@@ -226,7 +228,9 @@ export default function AdminPanel() {
               return `Agent name "${names[i]}" is duplicated.`
           }
         }
-        if (simulation.context_window_size < 1) return "Context window size must be at least 1."
+        if (simulation.evaluate_interval < 1) return "Validity check interval must be at least 1."
+        if (simulation.action_window_size < 1) return "Action window size must be at least 1."
+        if (simulation.performer_memory_size < 0) return "Performer memory size must be at least 0."
         return null
       }
       case 2: {
@@ -245,9 +249,10 @@ export default function AdminPanel() {
         const entries = Object.entries(experimental.groups)
         if (entries.length === 0) return "At least one treatment group is required."
         if (!experimental.chatroom_context.trim()) return "Chatroom context is required."
+        if (!experimental.ecological_validity_criteria.trim()) return "Ecological validity criteria are required."
         for (const [name, group] of entries) {
           if (!name.trim()) return "All treatment groups must have a name."
-          if (!group.treatment.trim()) return `Treatment description for "${name}" is required.`
+          if (!group.internal_validity_criteria.trim()) return `Internal validity criteria for "${name}" is required.`
           if (group.features.includes("news_article")) {
             const seed = group.seed
             if (!seed || !seed.headline.trim() || !seed.body.trim())
@@ -280,7 +285,7 @@ export default function AdminPanel() {
   const handleOpenWizard = useCallback(() => {
     // Reset wizard to fresh defaults for a new experiment
     setSimulation({ ...DEFAULT_SIMULATION })
-    setExperimental({ ...DEFAULT_EXPERIMENTAL, redirect_url: "", groups: { condition_1: { features: [], treatment: "" } } })
+    setExperimental({ ...DEFAULT_EXPERIMENTAL, redirect_url: "", groups: { condition_1: { features: [], internal_validity_criteria: "" } } })
     setTokens({ ...DEFAULT_TOKENS })
     setExperimentId("")
     setDescription("")

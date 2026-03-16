@@ -341,7 +341,8 @@ function OverviewTab({
                   <ConfigRow label="Duration" value={`${config.simulation.session_duration_minutes} min`} />
                   <ConfigRow label="Agents" value={`${config.simulation.num_agents} (${config.simulation.agent_names.filter(Boolean).join(", ") || "auto"})`} />
                   <ConfigRow label="Messages/min" value={config.simulation.messages_per_minute} />
-                  <ConfigRow label="Context window" value={config.simulation.context_window_size} />
+                  <ConfigRow label="Evaluate interval" value={config.simulation.evaluate_interval} />
+                  <ConfigRow label="Action window" value={config.simulation.action_window_size} />
                   <ConfigRow label="Random seed" value={config.simulation.random_seed} />
                 </div>
               </div>
@@ -365,7 +366,7 @@ function OverviewTab({
                     <div key={name} className="bg-admin-raised rounded-lg px-3 py-2 space-y-1 border border-admin-border">
                       <p className="font-mono text-xs font-semibold text-admin-text">{name}</p>
                       <p className="text-xs text-admin-muted">
-                        <span className="text-admin-faint">Treatment:</span> {group.treatment || "(none)"}
+                        <span className="text-admin-faint">Internal validity:</span> {group.internal_validity_criteria || "(none)"}
                       </p>
                       {group.features.length > 0 && (
                         <p className="text-xs text-admin-muted">

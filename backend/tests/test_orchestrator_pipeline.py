@@ -1,14 +1,15 @@
-"""Tests for the full Orchestrator pipeline (Director → Performer → Moderator).
+"""Tests for the full Orchestrator pipeline (Director Update → Evaluate → Act → Performer → Moderator).
 
 Uses mock LLM clients to test the orchestration logic without external API calls.
 Anonymization helpers are tested separately in test_anonymization.py — these tests
-focus on execute_turn() flow, retry logic, and action routing.
+focus on execute_turn() flow, the three-call Director, agent profile accumulation,
+retry logic, and action routing.
 """
 
 import json
 import random
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from models.message import Message
 from models.agent import Agent
@@ -46,9 +47,6 @@ def _make_logger():
 
 def _make_orchestrator(
     state=None,
-    director_response=None,
-    performer_response=None,
-    moderator_response=None,
     rng=None,
 ):
     """Create an Orchestrator with mock LLM clients."""
@@ -59,13 +57,6 @@ def _make_orchestrator(
     performer_llm = AsyncMock()
     moderator_llm = AsyncMock()
 
-    if director_response is not None:
-        director_llm.generate_response = AsyncMock(return_value=director_response)
-    if performer_response is not None:
-        performer_llm.generate_response = AsyncMock(return_value=performer_response)
-    if moderator_response is not None:
-        moderator_llm.generate_response = AsyncMock(return_value=moderator_response)
-
     logger = _make_logger()
 
     orch = Orchestrator(
@@ -74,35 +65,58 @@ def _make_orchestrator(
         moderator_llm=moderator_llm,
         state=state,
         logger=logger,
-        context_window_size=10,
+        evaluate_interval=10,
         chatroom_context="A test chatroom",
+        ecological_criteria="Informal Reddit-like chat with short messages.",
         rng=rng or random.Random(42),
     )
     return orch, logger
 
 
-def _director_json(
-    next_agent="Alice",
+def _update_json(profile_update="Active participant with neutral stance."):
+    """Build a valid Director Update JSON response."""
+    return json.dumps({"performer_profile_update": profile_update})
+
+
+def _evaluate_json(
+    internal="Treatment is on track.",
+    ecological="Conversation looks natural.",
+):
+    """Build a valid Director Evaluate JSON response."""
+    return json.dumps({
+        "internal_validity_evaluation": internal,
+        "ecological_validity_evaluation": ecological,
+    })
+
+
+def _action_json(
+    next_performer="Alice",
     action_type="message",
-    reasoning="test",
+    priority="test priority",
+    performer_rationale="test performer rationale",
+    action_rationale="test action rationale",
     performer_instruction=None,
     target_user=None,
     target_message_id=None,
 ):
-    """Build a valid Director JSON response.
+    """Build a valid Director Action JSON response.
 
-    Note: next_agent/target_user should use anonymized names (Member N)
+    Note: next_performer/target_user should use anonymized names (Performer N)
     since the Director operates in the anonymized space.
-    performer_instruction is required for non-like actions by parse_director_response.
     """
     data = {
-        "next_agent": next_agent,
+        "next_performer": next_performer,
         "action_type": action_type,
-        "reasoning": reasoning,
+        "priority": priority,
+        "performer_rationale": performer_rationale,
+        "action_rationale": action_rationale,
     }
-    # performer_instruction is required for non-like actions
     if action_type != "like":
-        data["performer_instruction"] = performer_instruction or {"tone": "neutral", "goal": "engage"}
+        data["performer_instruction"] = performer_instruction or {
+            "objective": "Engage the room",
+            "motivation": "Wants to contribute",
+            "directive": "Keep it short and friendly",
+        }
     if target_user:
         data["target_user"] = target_user
     if target_message_id:
@@ -117,13 +131,11 @@ class TestOrchestratorInit:
     def test_name_map_includes_all(self):
         state = _make_state()
         orch, _ = _make_orchestrator(state=state)
-        # All agents + user should be in the name map
         assert "Alice" in orch._name_map
         assert "Bob" in orch._name_map
         assert "participant" in orch._name_map
-        # All mapped to Member N
         for v in orch._name_map.values():
-            assert v.startswith("Member ")
+            assert v.startswith("Performer ")
 
     def test_reverse_map(self):
         state = _make_state()
@@ -137,12 +149,199 @@ class TestOrchestratorInit:
         orch2, _ = _make_orchestrator(state=state, rng=random.Random(42))
         assert orch1._name_map == orch2._name_map
 
-    def test_different_seeds_different_maps(self):
+    def test_agent_profiles_initialized_empty(self):
         state = _make_state()
-        orch1, _ = _make_orchestrator(state=state, rng=random.Random(1))
-        orch2, _ = _make_orchestrator(state=state, rng=random.Random(999))
-        # Very unlikely to be the same (3! = 6 permutations, p = 1/6)
-        # We accept the tiny chance of a flaky test here
+        orch, _ = _make_orchestrator(state=state)
+        assert len(orch.agent_profiles) == 3  # 2 agents + 1 human
+        for profile in orch.agent_profiles.values():
+            assert profile == ""
+
+    def test_ecological_criteria_stored(self):
+        state = _make_state()
+        orch, _ = _make_orchestrator(state=state)
+        assert "Reddit" in orch.ecological_criteria
+
+
+# ── execute_turn: first turn (skip Update, warm-up Evaluate) ─────────────────
+
+class TestFirstTurn:
+
+    @pytest.mark.asyncio
+    async def test_first_turn_skips_update_but_runs_evaluate(self):
+        """On the first turn (no messages, no last_agent), Update is skipped.
+
+        Evaluate fires because of warm-up mode (every turn until the first
+        full interval completes).
+        """
+        state = _make_state()
+        orch, logger = _make_orchestrator(state=state)
+
+        anon_alice = orch._name_map["Alice"]
+
+        evaluate_resp = _evaluate_json()
+        action_resp = _action_json(next_performer=anon_alice, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(
+            side_effect=[evaluate_resp, action_resp]
+        )
+        orch.performer_llm.generate_response = AsyncMock(return_value="Hello everyone!")
+        orch.moderator_llm.generate_response = AsyncMock(return_value="Hello everyone!")
+
+        result = await orch.execute_turn("criteria_A")
+
+        assert result is not None
+        assert result.action_type == "message"
+        assert result.agent_name == "Alice"
+        assert result.message.content == "Hello everyone!"
+
+        # Director LLM called twice (Evaluate + Act; no Update)
+        assert orch.director_llm.generate_response.call_count == 2
+
+        # Validity evaluations updated from warm-up Evaluate
+        assert orch._internal_validity_summary == "Treatment is on track."
+        assert orch._ecological_validity_summary == "Conversation looks natural."
+
+
+# ── execute_turn: Update + Evaluate + Act (second turn onwards) ──────────────
+
+class TestUpdateEvaluateAndAct:
+
+    @pytest.mark.asyncio
+    async def test_all_three_calls_run_on_second_turn(self):
+        """After the first turn, Update + Evaluate + Act should all run."""
+        state = _make_state()
+        state.add_message(Message.create(sender="Alice", content="First message"))
+
+        orch, logger = _make_orchestrator(state=state)
+        anon_alice = orch._name_map["Alice"]
+        anon_bob = orch._name_map["Bob"]
+
+        orch._last_agent = anon_alice
+        # Force Evaluate to fire on this turn
+        orch._turns_since_evaluate = orch.evaluate_interval - 1
+
+        update_resp = _update_json(profile_update="Alice opened with a friendly greeting.")
+        evaluate_resp = _evaluate_json()
+        action_resp = _action_json(next_performer=anon_bob, action_type="message")
+
+        orch.director_llm.generate_response = AsyncMock(
+            side_effect=[update_resp, evaluate_resp, action_resp]
+        )
+        orch.performer_llm.generate_response = AsyncMock(return_value="Hey there!")
+        orch.moderator_llm.generate_response = AsyncMock(return_value="Hey there!")
+
+        result = await orch.execute_turn("criteria_A")
+
+        assert result is not None
+        assert result.agent_name == "Bob"
+
+        # Director called three times (Update + Evaluate + Act)
+        assert orch.director_llm.generate_response.call_count == 3
+
+        # Validity evaluations updated
+        assert orch._internal_validity_summary == "Treatment is on track."
+        assert orch._ecological_validity_summary == "Conversation looks natural."
+
+        # Counter reset after Evaluate fires
+        assert orch._turns_since_evaluate == 0
+
+        # Alice's profile updated
+        assert orch.agent_profiles[anon_alice] == "Alice opened with a friendly greeting."
+
+    @pytest.mark.asyncio
+    async def test_update_failure_does_not_block_evaluate_and_act(self):
+        """If Update fails, Evaluate and Act should still proceed."""
+        state = _make_state()
+        state.add_message(Message.create(sender="Alice", content="Something"))
+
+        orch, logger = _make_orchestrator(state=state)
+        anon_alice = orch._name_map["Alice"]
+
+        orch._last_agent = anon_alice
+        # Force Evaluate to fire on this turn
+        orch._turns_since_evaluate = orch.evaluate_interval - 1
+
+        evaluate_resp = _evaluate_json()
+        action_resp = _action_json(next_performer=anon_alice, action_type="message")
+
+        orch.director_llm.generate_response = AsyncMock(
+            side_effect=["not valid json", evaluate_resp, action_resp]
+        )
+        orch.performer_llm.generate_response = AsyncMock(return_value="Hi")
+        orch.moderator_llm.generate_response = AsyncMock(return_value="Hi")
+
+        result = await orch.execute_turn("criteria_A")
+
+        assert result is not None
+        # Profile unchanged after failed Update
+        assert orch.agent_profiles[anon_alice] == ""
+
+    @pytest.mark.asyncio
+    async def test_evaluate_failure_does_not_block_act(self):
+        """If Evaluate fails, Act should still proceed with previous summaries."""
+        state = _make_state()
+        state.add_message(Message.create(sender="Alice", content="Something"))
+
+        orch, logger = _make_orchestrator(state=state)
+        anon_alice = orch._name_map["Alice"]
+
+        orch._last_agent = anon_alice
+        orch._internal_validity_summary = "Previous summary"
+        # Force Evaluate to fire on this turn
+        orch._turns_since_evaluate = orch.evaluate_interval - 1
+
+        update_resp = _update_json()
+        action_resp = _action_json(next_performer=anon_alice, action_type="message")
+
+        orch.director_llm.generate_response = AsyncMock(
+            side_effect=[update_resp, "not valid json", action_resp]
+        )
+        orch.performer_llm.generate_response = AsyncMock(return_value="Hi")
+        orch.moderator_llm.generate_response = AsyncMock(return_value="Hi")
+
+        result = await orch.execute_turn("criteria_A")
+
+        assert result is not None
+        assert orch._internal_validity_summary == "Previous summary"
+
+    @pytest.mark.asyncio
+    async def test_profile_accumulation_across_turns(self):
+        """Agent profiles should accumulate across multiple turns."""
+        state = _make_state()
+        orch, _ = _make_orchestrator(state=state)
+        anon_alice = orch._name_map["Alice"]
+        anon_bob = orch._name_map["Bob"]
+
+        # --- Turn 1: no Update, warm-up Evaluate + Act ---
+        evaluate_resp_1 = _evaluate_json()
+        action_resp_1 = _action_json(next_performer=anon_alice, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(
+            side_effect=[evaluate_resp_1, action_resp_1]
+        )
+        orch.performer_llm.generate_response = AsyncMock(return_value="Hello!")
+        orch.moderator_llm.generate_response = AsyncMock(return_value="Hello!")
+
+        result1 = await orch.execute_turn("criteria_A")
+        assert result1 is not None
+        state.add_message(result1.message)
+
+        assert orch.agent_profiles[anon_alice] == ""
+
+        # --- Turn 2: Update + warm-up Evaluate + Act ---
+        update_resp = _update_json(profile_update="Alice greeted the room warmly.")
+        evaluate_resp_2 = _evaluate_json()
+        action_resp_2 = _action_json(next_performer=anon_bob, action_type="message")
+
+        orch.director_llm.generate_response = AsyncMock(
+            side_effect=[update_resp, evaluate_resp_2, action_resp_2]
+        )
+        orch.performer_llm.generate_response = AsyncMock(return_value="Hey!")
+        orch.moderator_llm.generate_response = AsyncMock(return_value="Hey!")
+
+        result2 = await orch.execute_turn("criteria_A")
+        assert result2 is not None
+
+        assert orch.agent_profiles[anon_alice] == "Alice greeted the room warmly."
+        assert orch.agent_profiles[anon_bob] == ""
 
 
 # ── execute_turn: message action ─────────────────────────────────────────────
@@ -153,20 +352,14 @@ class TestExecuteTurnMessage:
     async def test_basic_message_action(self):
         state = _make_state()
         orch, logger = _make_orchestrator(state=state)
-
-        # Get the anonymous name for Alice
         anon_alice = orch._name_map["Alice"]
 
-        director_resp = _director_json(
-            next_agent=anon_alice,
-            action_type="message",
-            performer_instruction={"tone": "friendly"},
-        )
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
+        action_resp = _action_json(next_performer=anon_alice, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
         orch.performer_llm.generate_response = AsyncMock(return_value="Hello everyone!")
         orch.moderator_llm.generate_response = AsyncMock(return_value="Hello everyone!")
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
 
         assert result is not None
         assert result.action_type == "message"
@@ -174,26 +367,6 @@ class TestExecuteTurnMessage:
         assert result.message is not None
         assert result.message.sender == "Alice"
         assert result.message.content == "Hello everyone!"
-
-    @pytest.mark.asyncio
-    async def test_director_system_prompt_cached(self):
-        """Director system prompt should be built only once."""
-        state = _make_state()
-        orch, _ = _make_orchestrator(state=state)
-        anon_alice = orch._name_map["Alice"]
-
-        director_resp = _director_json(next_agent=anon_alice, action_type="message")
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
-        orch.performer_llm.generate_response = AsyncMock(return_value="Hi")
-        orch.moderator_llm.generate_response = AsyncMock(return_value="Hi")
-
-        assert orch._director_system_prompt is None
-        await orch.execute_turn("treatment_A")
-        assert orch._director_system_prompt is not None
-
-        cached = orch._director_system_prompt
-        await orch.execute_turn("treatment_A")
-        assert orch._director_system_prompt is cached  # same object
 
 
 # ── execute_turn: like action ────────────────────────────────────────────────
@@ -209,21 +382,20 @@ class TestExecuteTurnLike:
         orch, _ = _make_orchestrator(state=state)
         anon_alice = orch._name_map["Alice"]
 
-        director_resp = _director_json(
-            next_agent=anon_alice,
+        action_resp = _action_json(
+            next_performer=anon_alice,
             action_type="like",
             target_message_id=msg_id,
         )
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
 
         assert result is not None
         assert result.action_type == "like"
         assert result.agent_name == "Alice"
         assert result.target_message_id == msg_id
         assert result.message is None
-        # Performer should NOT have been called
         orch.performer_llm.generate_response.assert_not_called()
 
 
@@ -240,43 +412,21 @@ class TestExecuteTurnReply:
         orch, _ = _make_orchestrator(state=state)
         anon_alice = orch._name_map["Alice"]
 
-        director_resp = _director_json(
-            next_agent=anon_alice,
+        action_resp = _action_json(
+            next_performer=anon_alice,
             action_type="reply",
             target_message_id=target_msg.message_id,
         )
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
         orch.performer_llm.generate_response = AsyncMock(return_value="I agree!")
         orch.moderator_llm.generate_response = AsyncMock(return_value="I agree!")
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
 
         assert result is not None
         assert result.action_type == "reply"
         assert result.message.reply_to == target_msg.message_id
         assert result.message.quoted_text == "What do you think?"
-
-    @pytest.mark.asyncio
-    async def test_reply_to_nonexistent_message(self):
-        """Reply to a message ID that doesn't exist in state."""
-        state = _make_state()
-        orch, _ = _make_orchestrator(state=state)
-        anon_alice = orch._name_map["Alice"]
-
-        director_resp = _director_json(
-            next_agent=anon_alice,
-            action_type="reply",
-            target_message_id="nonexistent-id",
-        )
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
-        orch.performer_llm.generate_response = AsyncMock(return_value="Reply text")
-        orch.moderator_llm.generate_response = AsyncMock(return_value="Reply text")
-
-        result = await orch.execute_turn("treatment_A")
-
-        assert result is not None
-        assert result.message.reply_to == "nonexistent-id"
-        assert result.message.quoted_text is None  # target not found
 
 
 # ── execute_turn: mention action ─────────────────────────────────────────────
@@ -290,16 +440,16 @@ class TestExecuteTurnMention:
         anon_alice = orch._name_map["Alice"]
         anon_bob = orch._name_map["Bob"]
 
-        director_resp = _director_json(
-            next_agent=anon_alice,
+        action_resp = _action_json(
+            next_performer=anon_alice,
             action_type="@mention",
             target_user=anon_bob,
         )
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
         orch.performer_llm.generate_response = AsyncMock(return_value="what do you think?")
         orch.moderator_llm.generate_response = AsyncMock(return_value="what do you think?")
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
 
         assert result is not None
         assert result.action_type == "@mention"
@@ -308,58 +458,109 @@ class TestExecuteTurnMention:
         assert result.message.mentions == ["Bob"]
 
 
+# ── execute_turn: wait (yield to participant) ────────────────────────────────
+
+class TestExecuteTurnWait:
+    """Director selects the human participant → turn short-circuits as 'wait'.
+
+    The Director is blind to who is human — it just picks a performer.
+    The orchestrator detects that the chosen performer is the participant
+    and converts this into a wait (skip Performer/Moderator).
+    """
+
+    @pytest.mark.asyncio
+    async def test_selecting_participant_returns_wait(self):
+        """Director selects participant's anonymous name → treated as wait."""
+        state = _make_state()
+        orch, logger = _make_orchestrator(state=state)
+
+        anon_user = orch._name_map[state.user_name]
+        action_resp = _action_json(next_performer=anon_user, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
+
+        result = await orch.execute_turn("criteria_A")
+        assert result is not None
+        assert result.action_type == "wait"
+        assert result.agent_name == "participant"
+        assert result.message is None
+        # Performer/Moderator should NOT have been called.
+        orch.performer_llm.generate_response.assert_not_called()
+        orch.moderator_llm.generate_response.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_wait_does_not_advance_evaluate_counter(self):
+        """Wait turns should not count toward the evaluate cadence."""
+        state = _make_state()
+        orch, logger = _make_orchestrator(state=state)
+
+        anon_user = orch._name_map[state.user_name]
+        action_resp = _action_json(next_performer=anon_user, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
+
+        counter_before = orch._turns_since_evaluate
+        await orch.execute_turn("criteria_A")
+        assert orch._turns_since_evaluate == counter_before
+
+    @pytest.mark.asyncio
+    async def test_wait_does_not_update_last_agent(self):
+        """Wait turns should not change _last_agent tracking."""
+        state = _make_state()
+        orch, logger = _make_orchestrator(state=state)
+
+        anon_user = orch._name_map[state.user_name]
+        action_resp = _action_json(next_performer=anon_user, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
+
+        last_agent_before = orch._last_agent
+        await orch.execute_turn("criteria_A")
+        assert orch._last_agent == last_agent_before
+
+
 # ── execute_turn: error handling ─────────────────────────────────────────────
 
 class TestExecuteTurnErrors:
 
     @pytest.mark.asyncio
-    async def test_director_llm_exception_returns_none(self):
+    async def test_director_action_exception_returns_none(self):
         state = _make_state()
         orch, logger = _make_orchestrator(state=state)
         orch.director_llm.generate_response = AsyncMock(side_effect=RuntimeError("API error"))
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
         assert result is None
         logger.log_error.assert_called()
 
     @pytest.mark.asyncio
-    async def test_director_returns_none_response(self):
+    async def test_director_action_returns_none_response(self):
         state = _make_state()
         orch, _ = _make_orchestrator(state=state)
         orch.director_llm.generate_response = AsyncMock(return_value=None)
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_director_returns_empty_string(self):
-        state = _make_state()
-        orch, _ = _make_orchestrator(state=state)
-        orch.director_llm.generate_response = AsyncMock(return_value="")
-
-        result = await orch.execute_turn("treatment_A")
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_director_returns_invalid_json(self):
+    async def test_director_action_returns_invalid_json(self):
         state = _make_state()
         orch, logger = _make_orchestrator(state=state)
         orch.director_llm.generate_response = AsyncMock(return_value="not valid json at all")
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
         assert result is None
         logger.log_error.assert_called()
 
     @pytest.mark.asyncio
-    async def test_no_agents_returns_none(self):
+    async def test_no_agents_returns_wait(self):
+        """With no agents, only the participant is available — Director must yield."""
         state = _make_state(agents=[])
         orch, logger = _make_orchestrator(state=state)
         orch.director_llm.generate_response = AsyncMock(
-            return_value=_director_json(next_agent="Member 1")
+            return_value=_action_json(next_performer="Performer 1")
         )
 
-        result = await orch.execute_turn("treatment_A")
-        assert result is None
+        result = await orch.execute_turn("criteria_A")
+        assert result is not None
+        assert result.action_type == "wait"
 
     @pytest.mark.asyncio
     async def test_unknown_agent_falls_back(self):
@@ -367,15 +568,15 @@ class TestExecuteTurnErrors:
         state = _make_state()
         orch, logger = _make_orchestrator(state=state)
 
-        director_resp = _director_json(next_agent="UnknownAgent", action_type="message")
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
+        action_resp = _action_json(next_performer="UnknownAgent", action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
         orch.performer_llm.generate_response = AsyncMock(return_value="Hi")
         orch.moderator_llm.generate_response = AsyncMock(return_value="Hi")
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
         assert result is not None
         assert result.agent_name in ("Alice", "Bob")
-        logger.log_error.assert_called()  # logged the fallback
+        logger.log_error.assert_called()
 
 
 # ── Performer retry logic ────────────────────────────────────────────────────
@@ -388,16 +589,15 @@ class TestPerformerRetry:
         orch, logger = _make_orchestrator(state=state)
         anon_alice = orch._name_map["Alice"]
 
-        director_resp = _director_json(next_agent=anon_alice, action_type="message")
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
+        action_resp = _action_json(next_performer=anon_alice, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
 
-        # Performer fails twice, succeeds on third
         orch.performer_llm.generate_response = AsyncMock(
             side_effect=[None, None, "Third time's the charm"]
         )
         orch.moderator_llm.generate_response = AsyncMock(return_value="Third time's the charm")
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
         assert result is not None
         assert result.message.content == "Third time's the charm"
         assert orch.performer_llm.generate_response.call_count == 3
@@ -408,34 +608,17 @@ class TestPerformerRetry:
         orch, logger = _make_orchestrator(state=state)
         anon_alice = orch._name_map["Alice"]
 
-        director_resp = _director_json(next_agent=anon_alice, action_type="message")
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
+        action_resp = _action_json(next_performer=anon_alice, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
 
-        # All attempts fail
         orch.performer_llm.generate_response = AsyncMock(return_value=None)
         orch.moderator_llm.generate_response = AsyncMock(return_value=None)
 
-        result = await orch.execute_turn("treatment_A")
-        assert result is None
-        assert orch.performer_llm.generate_response.call_count == MAX_PERFORMER_RETRIES
-
-    @pytest.mark.asyncio
-    async def test_performer_exception_triggers_retry(self):
-        state = _make_state()
-        orch, logger = _make_orchestrator(state=state)
-        anon_alice = orch._name_map["Alice"]
-
-        director_resp = _director_json(next_agent=anon_alice, action_type="message")
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
-
-        # First call raises, second succeeds
-        orch.performer_llm.generate_response = AsyncMock(
-            side_effect=[RuntimeError("timeout"), "Success"]
-        )
-        orch.moderator_llm.generate_response = AsyncMock(return_value="Success")
-
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
         assert result is not None
+        assert result.action_type == "wait"
+        assert result.agent_name == "Alice"
+        assert orch.performer_llm.generate_response.call_count == MAX_PERFORMER_RETRIES
 
     @pytest.mark.asyncio
     async def test_moderator_no_content_triggers_retry(self):
@@ -444,18 +627,17 @@ class TestPerformerRetry:
         orch, logger = _make_orchestrator(state=state)
         anon_alice = orch._name_map["Alice"]
 
-        director_resp = _director_json(next_agent=anon_alice, action_type="message")
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
+        action_resp = _action_json(next_performer=anon_alice, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
 
         orch.performer_llm.generate_response = AsyncMock(
             side_effect=["bad output", "good output"]
         )
-        # First moderator call signals no content, second succeeds
         orch.moderator_llm.generate_response = AsyncMock(
             side_effect=["NO_CONTENT", "Cleaned output"]
         )
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
         assert result is not None
         assert result.message.content == "Cleaned output"
 
@@ -472,17 +654,15 @@ class TestOutputDeanonymization:
         anon_alice = orch._name_map["Alice"]
         anon_bob = orch._name_map["Bob"]
 
-        director_resp = _director_json(next_agent=anon_alice, action_type="message")
-        orch.director_llm.generate_response = AsyncMock(return_value=director_resp)
+        action_resp = _action_json(next_performer=anon_alice, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
 
-        # Performer uses anonymous labels
         performer_output = f"I agree with {anon_bob}!"
         orch.performer_llm.generate_response = AsyncMock(return_value=performer_output)
         orch.moderator_llm.generate_response = AsyncMock(return_value=performer_output)
 
-        result = await orch.execute_turn("treatment_A")
+        result = await orch.execute_turn("criteria_A")
         assert result is not None
-        # Content should have real names
         assert "Bob" in result.message.content
         assert anon_bob not in result.message.content
 
@@ -497,11 +677,14 @@ class TestTurnResult:
             action_type="message",
             agent_name="Alice",
             message=msg,
-            director_reasoning="Alice should greet",
+            priority="Greet the room",
+            performer_rationale="Alice is friendly",
+            action_rationale="Opening message needed",
         )
         assert result.action_type == "message"
         assert result.agent_name == "Alice"
         assert result.message is msg
+        assert result.priority == "Greet the room"
         assert result.target_message_id is None
         assert result.target_user is None
 
@@ -520,4 +703,6 @@ class TestTurnResult:
         assert result.message is None
         assert result.target_message_id is None
         assert result.target_user is None
-        assert result.director_reasoning is None
+        assert result.priority is None
+        assert result.performer_rationale is None
+        assert result.action_rationale is None

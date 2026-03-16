@@ -422,7 +422,7 @@ def _llm_row(role: str, sim: dict) -> str:
 # Keys handled explicitly in structured sections — skip when rendering leftovers.
 _SIM_STRUCTURED_KEYS = {
     "session_duration_minutes", "num_agents", "agent_names",
-    "messages_per_minute", "context_window_size", "random_seed",
+    "messages_per_minute", "evaluate_interval", "random_seed",
     "director_llm_provider", "director_llm_model", "director_temperature",
     "director_top_p", "director_max_tokens",
     "performer_llm_provider", "performer_llm_model", "performer_temperature",
@@ -431,7 +431,7 @@ _SIM_STRUCTURED_KEYS = {
     "moderator_top_p", "moderator_max_tokens",
 }
 
-_EXP_STRUCTURED_KEYS = {"treatment", "features", "seed"}
+_EXP_STRUCTURED_KEYS = {"internal_validity_criteria", "features", "seed"}
 
 
 def render_session_start(ev: dict) -> str:
@@ -449,7 +449,7 @@ def render_session_start(ev: dict) -> str:
     agent_names_str = ", ".join(n for n in agent_names if n) or "auto"
     num_agents = sim_cfg.get("num_agents", len(agent_names))
 
-    treatment_text = exp_cfg.get("treatment", "")
+    treatment_text = exp_cfg.get("internal_validity_criteria", "")
     features = exp_cfg.get("features", [])
     seed = exp_cfg.get("seed")
 
@@ -477,7 +477,7 @@ def render_session_start(ev: dict) -> str:
     parts.append(_config_row("Duration", f"{dur} min" if dur else "?"))
     parts.append(_config_row("Agents", f"{num_agents} ({agent_names_str})"))
     parts.append(_config_row("Messages/min", str(sim_cfg.get("messages_per_minute", "?"))))
-    parts.append(_config_row("Context window", str(sim_cfg.get("context_window_size", "?"))))
+    parts.append(_config_row("Evaluate interval", str(sim_cfg.get("evaluate_interval", "?"))))
     parts.append(_config_row("Random seed", str(sim_cfg.get("random_seed", "?"))))
     parts.append('    </div>')
 
@@ -489,11 +489,11 @@ def render_session_start(ev: dict) -> str:
     parts.append(_llm_row("Moderator", sim_cfg))
     parts.append('    </div>')
 
-    # ── Treatment section ──
+    # ── Internal Validity section ──
     parts.append('    <div class="config-section">')
-    parts.append('      <h3>Treatment</h3>')
+    parts.append('      <h3>Internal Validity Criteria</h3>')
     if treatment_text:
-        parts.append(_config_row("Treatment", treatment_text, mono=False))
+        parts.append(_config_row("Criteria", treatment_text, mono=False))
     if features:
         parts.append(_config_row("Features", ", ".join(features)))
     if seed and isinstance(seed, dict):
@@ -633,18 +633,32 @@ def render_llm_call(ev: dict) -> str:
 def _render_director_parsed(parsed: dict) -> str:
     parts = ['<div class="director-parsed">']
 
-    if "reasoning" in parsed:
+    if "priority" in parsed:
         parts.append(
             f'<div class="director-field">'
-            f'<div class="director-field-label">Reasoning</div>'
-            f'{_esc(parsed["reasoning"])}'
+            f'<div class="director-field-label">Priority</div>'
+            f'{_esc(parsed["priority"])}'
+            f'</div>'
+        )
+    if "performer_rationale" in parsed:
+        parts.append(
+            f'<div class="director-field">'
+            f'<div class="director-field-label">Performer Rationale</div>'
+            f'{_esc(parsed["performer_rationale"])}'
+            f'</div>'
+        )
+    if "action_rationale" in parsed:
+        parts.append(
+            f'<div class="director-field">'
+            f'<div class="director-field-label">Action Rationale</div>'
+            f'{_esc(parsed["action_rationale"])}'
             f'</div>'
         )
 
     # Decision chips
     chips = []
-    if "next_agent" in parsed:
-        chips.append(f'Agent: {_esc(parsed["next_agent"])}')
+    if "next_performer" in parsed:
+        chips.append(f'Performer: {_esc(parsed["next_performer"])}')
     if "action_type" in parsed:
         chips.append(f'Action: {_esc(parsed["action_type"])}')
     if parsed.get("target_user"):

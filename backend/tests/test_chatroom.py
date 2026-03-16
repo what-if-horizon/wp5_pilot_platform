@@ -28,7 +28,7 @@ MINIMAL_SIM_CONFIG = {
     "agent_names": ["Alice", "Bob"],
     "session_duration_minutes": 30,
     "messages_per_minute": 6,
-    "context_window_size": 10,
+    "evaluate_interval": 10,
     "random_seed": 42,
     "llm_provider": "gemini",
 }
@@ -37,11 +37,11 @@ MINIMAL_EXP_CONFIG = {
     "chatroom_context": "A test chatroom about science",
     "groups": {
         "control": {
-            "treatment": "Be helpful and friendly.",
+            "internal_validity_criteria": "Be helpful and friendly.",
             "features": [],
         },
         "treatment_a": {
-            "treatment": "Be provocative.",
+            "internal_validity_criteria": "Be provocative.",
             "features": ["news_article"],
             "seed": {
                 "headline": "Breaking",
@@ -124,7 +124,7 @@ class TestSimulationSessionInit:
             session, ws = _create_session()
             assert session.session_id == "test-session"
             assert session.treatment_group == "control"
-            assert session.treatment == "Be helpful and friendly."
+            assert session.internal_validity_criteria == "Be helpful and friendly."
             assert session.running is False
 
     def test_no_config_raises(self):
@@ -167,19 +167,19 @@ class TestSimulationSessionInit:
                     _config=MINIMAL_CONFIG,
                 )
 
-    def test_missing_treatment_description_raises(self):
+    def test_missing_internal_validity_criteria_raises(self):
         from platforms.chatroom import SimulationSession
 
         bad_config = {
             "simulation": MINIMAL_SIM_CONFIG,
             "experimental": {
                 "groups": {
-                    "empty": {}  # no "treatment" key
+                    "empty": {}  # no "internal_validity_criteria" key
                 }
             },
         }
         with _patch_externals():
-            with pytest.raises(RuntimeError, match="no 'treatment'"):
+            with pytest.raises(RuntimeError, match="no 'internal_validity_criteria'"):
                 SimulationSession(
                     session_id="s1",
                     websocket_send=AsyncMock(),

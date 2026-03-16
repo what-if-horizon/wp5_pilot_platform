@@ -52,7 +52,7 @@ async def test_activate_session(db_pool, experiment_id):
         started_at=now,
         random_seed=42,
         simulation_config={"key": "value"},
-        experimental_config={"treatment": "be civil"},
+        experimental_config={"internal_validity_criteria": "be civil"},
     )
     row = await session_repo.get_session(db_pool, SESSION_ID)
     assert row["status"] == "active"

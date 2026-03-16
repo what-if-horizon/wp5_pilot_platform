@@ -136,12 +136,12 @@ function GroupCard({
       />
 
       <div>
-        <label className="block text-xs font-medium text-admin-muted mb-1">Treatment description</label>
+        <label className="block text-xs font-medium text-admin-muted mb-1">Internal validity criteria</label>
         <textarea
-          value={group.treatment}
-          onChange={(e) => onChangeGroup({ ...group, treatment: e.target.value })}
+          value={group.internal_validity_criteria}
+          onChange={(e) => onChangeGroup({ ...group, internal_validity_criteria: e.target.value })}
           rows={4}
-          placeholder="Describe the agent behaviour for this treatment condition..."
+          placeholder="Describe the internal validity criteria for this condition..."
           className={`${inputClass} resize-vertical`}
         />
       </div>
@@ -169,7 +169,7 @@ export default function StepTreatments({ config, onChange, availableFeatures }: 
       ...config,
       groups: {
         ...config.groups,
-        [newName]: { features: [], treatment: "" },
+        [newName]: { features: [], internal_validity_criteria: "" },
       },
     })
   }
@@ -204,7 +204,7 @@ export default function StepTreatments({ config, onChange, availableFeatures }: 
         const slug = `${a}_${b}`.toLowerCase().replace(/[^a-z0-9_]/g, "_")
         groups[slug] = {
           features: [],
-          treatment: "",
+          internal_validity_criteria: "",
         }
       }
     }
@@ -221,16 +221,29 @@ export default function StepTreatments({ config, onChange, availableFeatures }: 
         </p>
       </div>
 
-      <div className="bg-admin-surface rounded-lg border border-admin-border p-5">
-        <label className="block text-sm font-medium text-admin-text mb-1">Chatroom context</label>
-        <textarea
-          value={config.chatroom_context}
-          onChange={(e) => onChange({ ...config, chatroom_context: e.target.value })}
-          rows={3}
-          placeholder="e.g. This is a Spanish-language chatroom on Telegram, based in Spain."
-          className={`${inputClass} resize-vertical`}
-        />
-        <p className="text-xs text-admin-faint mt-1">Shared across all treatment groups. Injected into the Director prompt.</p>
+      <div className="bg-admin-surface rounded-lg border border-admin-border p-5 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-admin-text mb-1">Chatroom context</label>
+          <textarea
+            value={config.chatroom_context}
+            onChange={(e) => onChange({ ...config, chatroom_context: e.target.value })}
+            rows={3}
+            placeholder="e.g. This is a Spanish-language chatroom on Telegram, based in Spain."
+            className={`${inputClass} resize-vertical`}
+          />
+          <p className="text-xs text-admin-faint mt-1">The topic and setting of the chatroom. Shared across all treatment groups.</p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-admin-text mb-1">Ecological validity criteria</label>
+          <textarea
+            value={config.ecological_validity_criteria}
+            onChange={(e) => onChange({ ...config, ecological_validity_criteria: e.target.value })}
+            rows={4}
+            placeholder="e.g. The chatroom should resemble an informal Reddit thread: short messages, casual tone, a mix of agreement and disagreement, with frequent use of likes and occasional humour."
+            className={`${inputClass} resize-vertical`}
+          />
+          <p className="text-xs text-admin-faint mt-1">What &ldquo;realistic&rdquo; means for this chatroom. The Director uses this to maintain natural conversational flow. Shared across all treatment groups.</p>
+        </div>
       </div>
 
       {/* 2x2 builder */}

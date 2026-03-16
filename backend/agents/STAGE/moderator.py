@@ -1,6 +1,10 @@
+"""Moderator module — extraction gate for Performer output.
+
+Strips formatting artifacts and meta-commentary from the Performer's raw
+output, returning only the clean chatroom message content.
+"""
 from pathlib import Path
 from typing import Optional
-
 
 # Sentinel value the Moderator returns when no valid message content is found
 NO_CONTENT = "NO_CONTENT"
@@ -19,11 +23,10 @@ def build_moderator_system_prompt(chatroom_context: str = "") -> str:
     return prompt
 
 
-def build_moderator_user_prompt(performer_output: str, action_type: str) -> str:
+def build_moderator_user_prompt(performer_output: str) -> str:
     """Build the per-turn user prompt with the Performer's raw output."""
     prompt = _render_prompt(_UNIFIED_TEMPLATE, "user")
     prompt = prompt.replace("{PERFORMER_OUTPUT}", performer_output)
-    prompt = prompt.replace("{ACTION_TYPE}", action_type)
     return prompt
 
 
