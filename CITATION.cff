@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "STAGE: Simulated Theater for Agent-Generated Experiments"
+title: "STAGElab: A Platform for Agent-Generated Experiments"
 message: "If you use this software, please cite it using the metadata from this file."
 type: software
 authors:

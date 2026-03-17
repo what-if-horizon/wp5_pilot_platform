@@ -22,7 +22,7 @@ HTML_HEAD = """\
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Session Report – {session_id}</title>
+<title>STAGElab – Session Report – {session_id}</title>
 <style>
   :root {{
     --bg: #f5f6fa;
@@ -580,10 +580,18 @@ def render_llm_call(ev: dict) -> str:
     response = data.get("response", "")
     error = data.get("error")
 
-    is_director = agent == "__director__"
+    is_director = agent.startswith("__director")
     is_moderator = agent == "__moderator__"
     if is_director:
-        role_label = "Director"
+        # Distinguish the three Director sub-calls
+        if agent == "__director_update__":
+            role_label = "Director \u2192 Update"
+        elif agent == "__director_evaluate__":
+            role_label = "Director \u2192 Evaluate"
+        elif agent == "__director_action__":
+            role_label = "Director \u2192 Action"
+        else:
+            role_label = "Director"
         role_class = "director"
     elif is_moderator:
         role_label = "Moderator"
@@ -598,7 +606,12 @@ def render_llm_call(ev: dict) -> str:
     if is_director:
         parsed = _try_parse_director_json(response)
         if parsed:
-            parsed_html = _render_director_parsed(parsed)
+            if agent == "__director_update__":
+                parsed_html = _render_director_update_parsed(parsed)
+            elif agent == "__director_evaluate__":
+                parsed_html = _render_director_evaluate_parsed(parsed)
+            else:
+                parsed_html = _render_director_parsed(parsed)
 
     error_html = ""
     if error:
@@ -628,6 +641,61 @@ def render_llm_call(ev: dict) -> str:
     {error_html}
   </div>
 </div>"""
+
+
+def _render_director_update_parsed(parsed: dict) -> str:
+    """Render the Director Update step's JSON fields."""
+    parts = ['<div class="director-parsed">']
+    if "performer_profile_update" in parsed:
+        parts.append(
+            f'<div class="director-field">'
+            f'<div class="director-field-label">Performer Profile Update</div>'
+            f'{_esc(parsed["performer_profile_update"])}'
+            f'</div>'
+        )
+    # Show any extra keys not explicitly handled
+    for key, val in parsed.items():
+        if key == "performer_profile_update":
+            continue
+        parts.append(
+            f'<div class="director-field">'
+            f'<div class="director-field-label">{_esc(key)}</div>'
+            f'{_esc(str(val))}'
+            f'</div>'
+        )
+    parts.append('</div>')
+    return "\n".join(parts)
+
+
+def _render_director_evaluate_parsed(parsed: dict) -> str:
+    """Render the Director Evaluate step's JSON fields."""
+    parts = ['<div class="director-parsed">']
+    if "internal_validity_evaluation" in parsed:
+        parts.append(
+            f'<div class="director-field">'
+            f'<div class="director-field-label">Internal Validity Evaluation</div>'
+            f'{_esc(parsed["internal_validity_evaluation"])}'
+            f'</div>'
+        )
+    if "ecological_validity_evaluation" in parsed:
+        parts.append(
+            f'<div class="director-field">'
+            f'<div class="director-field-label">Ecological Validity Evaluation</div>'
+            f'{_esc(parsed["ecological_validity_evaluation"])}'
+            f'</div>'
+        )
+    # Show any extra keys not explicitly handled
+    for key, val in parsed.items():
+        if key in ("internal_validity_evaluation", "ecological_validity_evaluation"):
+            continue
+        parts.append(
+            f'<div class="director-field">'
+            f'<div class="director-field-label">{_esc(key)}</div>'
+            f'{_esc(str(val))}'
+            f'</div>'
+        )
+    parts.append('</div>')
+    return "\n".join(parts)
 
 
 def _render_director_parsed(parsed: dict) -> str:

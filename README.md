@@ -1,6 +1,6 @@
-# What-If - WP5 Pilot Platform
+# STAGElab
 
-This is a research platform for integrating AI agents into simulated social media environments to support immersive user studies. In this current iteration, a single human participant interacts with multiple AI agents in a chatroom, with agent behaviour driven by experimentally controlled treatment conditions.
+A research platform for running controlled human-facing experiments in AI-agent chatrooms. A single human participant interacts with multiple AI agents whose behaviour is coordinated to realise experimentally controlled treatment conditions.
 
 **Status**: Under active development for the [What-If](https://what-if-horizon.eu/) project by https://github.com/Rptkiddle.
 
@@ -9,15 +9,19 @@ This is a research platform for integrating AI agents into simulated social medi
 
 ## STAGE Framework
 
-The platform is powered by **STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments), a multi-agent strategic coordination framework.
+**STAGE** (**S**imulated **T**heater for **A**gent-**G**enerated **E**xperiments) is a generative multi-agent coordination framework that lets a researcher describe experimental conditions in plain language and produces a live chatroom that realises those conditions around a real human participant.
 
-### The problem STAGE addresses:
+In a participant-facing chatroom experiment, the experimental stimulus is not a fixed input — it is a property of the *conversation itself*, emerging from the complex interactions of multiple AI agents and a human participant. The researcher cannot script this discourse in advance. It must unfold naturally, respond to whatever the human says, and still satisfy the intended experimental manipulation. STAGE governs this emergence.
 
-In a participant-facing multi-agent chatroom experiment, the experimental stimulus is not a fixed input; it is the *conversation itself*, which emerges from the interactions of multiple agents and the human participant. The researcher cannot script this discourse in advance. It must unfold naturally, respond to whatever the human says, and still realise the intended experimental conditions. This makes the chatroom state dynamic and the stimulus fundamentally emergent.
+STAGE gives the researcher two levers — **internal validity** criteria (what the experimental manipulation requires, defined per treatment group) and **ecological validity** criteria (what makes the experience feel realistic, defined per experiment) — and uses a dedicated coordinating model (the Director) to steer every agent action toward both goals simultaneously. Message generation is handled by a separate model (the Performer) that can be swapped or fine-tuned for natural online speech in the target language or domain, while all identities are anonymised so the Director cannot distinguish human from agent.
 
-STAGE is a framework for *governing this emergence*. It gives the researcher two levers — **internal validity** criteria (what the experimental manipulation requires) and **ecological validity** criteria (what makes the experience feel realistic to the participant) — and uses a dedicated coordinating model (the Director) to steer every agent action toward both goals simultaneously. Message generation is handled by a separate model (the Performer) that can be optimised for natural online speech in the target language or domain, while all identities are anonymised so the Director cannot distinguish human from agent (both are treated as first-class).
+### Design
 
-> **Cautionary note on emergent content:** Because the STAGE framework coordinates multiple generative models, the resulting chatroom discourse is emergent and cannot be fully predetermined. Responsibility for participant safety lies with the researcher, who must ensure appropriate informed consent, ethical approval, and active monitoring of study sessions. This is especially important when using unaligned, fine-tuned, or otherwise higher-risk models within the pipeline.
+STAGE adopts the **centralised orchestrator** pattern from multi-agent system design (Kim et al., 2025) — a dedicated coordinator plans and delegates work to task-specific agents, rather than allowing agents to act independently. This allows the platform to handle the many degrees of freedom in multi-agent interaction — turn-taking, action selection, targeting, and other dialogics — without requiring the researcher to specify these dynamics in advance. 
+
+The design draws inspiration from Concordia (Vezhnevets et al., 2023), which introduced the Game Master pattern for generative agent-based simulations. Whereas Concordia facilitates open-ended social simulation between autonomous agents, STAGE is purpose-built for **treatment-outcome research with human participants**: the simulation framework optimises for researcher-defined validity criteria, and the platform provides the surrounding infrastructure needed to run controlled studies.
+
+> **Cautionary note on emergent content:** Because STAGE coordinates multiple large language models (LLMs), the resulting chatroom discourse is emergent and cannot be fully predetermined. Responsibility for participant safety lies with the researcher, who must ensure appropriate informed consent, ethical approval, and active monitoring of study sessions. This is especially important when using unaligned, fine-tuned, or otherwise higher-risk models within the pipeline.
 
 ### Roles
 
@@ -330,9 +334,14 @@ wp5_pilot_platform/
 
 If you use this platform in your research, please cite it:
 
-> Kiddle, R. & van Atteveldt, W. (2026). *STAGE: Simulated Theater for Agent-Generated Experiments* [Software]. GitHub. https://github.com/Rptkiddle/wp5_pilot_platform
+> Kiddle, R. & van Atteveldt, W. (2026). *STAGElab: A Platform for Agent-Generated Experiments* [Software]. GitHub. https://github.com/Rptkiddle/wp5_pilot_platform
 
 A methods paper is forthcoming — this section will be updated with a full reference when available.
+
+### References
+
+- Kim, Y., Gu, K., Park, C., et al. (2025). *Towards a Science of Scaling Agent Systems*. arXiv preprint [arXiv:2512.08296](https://arxiv.org/abs/2512.08296).
+- Vezhnevets, A. S., Agapiou, J. P., Aharon, A., et al. (2023). *Generative agent-based modeling with actions grounded in physical, social, or digital space using Concordia*. arXiv preprint [arXiv:2312.03664](https://arxiv.org/abs/2312.03664).
 
 GitHub also provides a "Cite this repository" button (powered by [`CITATION.cff`](CITATION.cff)).
 

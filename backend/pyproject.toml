@@ -1,7 +1,7 @@
 [project]
-name = "WP5-prototype-backend"
+name = "stagelab-backend"
 version = "0.1.0"
-description = "Backend for WhatsApp Community chatroom experiment"
+description = "Backend for STAGElab: a platform for agent-generated experiments"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi",           # FastAPI framework
