@@ -4,6 +4,8 @@ A research platform for running controlled human-facing experiments in AI-agent 
 
 **Status**: Under active development for the [What-If](https://what-if-horizon.eu/) project by https://github.com/Rptkiddle.
 
+![Chatroom — participant view](https://github.com/user-attachments/assets/f7440ebe-526e-4b70-aae0-30e566f184ef)
+
 **[STAGE Framework](#stage-framework)** · **[Installation](#installation)** · **[Setup Wizard](#setup-wizard)** · **[Dashboard](#dashboard)** · **[API](#api-endpoints)** · **[Project Structure](#project-structure)**
 
 
