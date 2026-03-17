@@ -4,7 +4,7 @@ A research platform for running controlled human-facing experiments in AI-agent 
 
 **Status**: Under active development for the [What-If](https://what-if-horizon.eu/) project by https://github.com/Rptkiddle.
 
-![Chatroom — participant view](https://github.com/user-attachments/assets/f7440ebe-526e-4b70-aae0-30e566f184ef)
+![Chatroom — participant view](assets/chatroom.png)
 
 **[STAGE Framework](#stage-framework)** · **[Installation](#installation)** · **[Setup Wizard](#setup-wizard)** · **[Dashboard](#dashboard)** · **[API](#api-endpoints)** · **[Project Structure](#project-structure)**
 
@@ -140,7 +140,7 @@ All experiment configuration and monitoring is managed through the **Admin Panel
 
 If no experiment is currently active, the admin panel will direct you to a setup wizard:
 
-![Setup Wizard](https://github.com/user-attachments/assets/ab72014c-fe6e-4997-a92d-44aca71c1b7a)
+![Setup Wizard](assets/wizard.png)
 
 The wizard walks you through six steps. Once an experiment is saved, its configuration is **immutable** — to change settings you must create a new experiment.
 
@@ -243,7 +243,7 @@ To modify settings after saving, create a new experiment with a new ID. You can 
 
 After saving an experiment, the admin panel switches to a monitoring dashboard with four tabs:
 
-![Admin Dashboard](https://github.com/user-attachments/assets/8adf5502-a030-4294-8461-ac7dd7324096)
+![Admin Dashboard](assets/dashboard.png)
 
 - **Overview** — live statistics, per-group enrollment, experimental configuration, and CSV token download.
 - **Sessions** — table of all sessions with status, treatment group, token, timestamps, duration, and message count.
