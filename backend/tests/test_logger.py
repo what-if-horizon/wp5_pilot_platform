@@ -79,14 +79,14 @@ class TestLogMethods:
             mock_insert.assert_called_once_with("session_end", {"reason": "timeout"})
 
     @pytest.mark.asyncio
-    async def test_log_message(self):
+    async def test_log_message_is_noop(self):
         logger = Logger("s1", "e1")
 
         with patch.object(logger, "_async_insert", new_callable=AsyncMock) as mock_insert:
             msg = {"sender": "Alice", "content": "Hi"}
             logger.log_message(msg)
             await asyncio.sleep(0.01)
-            mock_insert.assert_called_once_with("message", msg)
+            mock_insert.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_log_llm_call(self):

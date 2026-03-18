@@ -71,8 +71,10 @@ class Logger:
         # HTML report is now generated on-demand via GET /session/{id}/report
 
     def log_message(self, message: dict) -> None:
-        """Log a message event (supplements message_repo.insert_message)."""
-        self.log_event("message", message)
+        """Deprecated: messages are persisted via message_repo.insert_message().
+        Retained for backward compatibility; this is a no-op.
+        """
+        pass
 
     def log_llm_call(
         self,
@@ -140,6 +142,43 @@ class Logger:
             # Last-resort stderr output; never raise from a background task.
             print(
                 f"[Logger] DB insert failed for event '{event_type}': {exc}",
+                file=sys.stderr,
+            )
+
+    # ── Admin / system events (no session context) ────────────────────────────
+
+    @staticmethod
+    def log_admin_event(
+        event_type: str,
+        data: Any,
+        experiment_id: str = "",
+    ) -> None:
+        """Fire-and-forget event with no session context (admin actions, token lifecycle)."""
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(Logger._admin_insert(event_type, data, experiment_id))
+        except RuntimeError:
+            pass
+
+    @staticmethod
+    async def _admin_insert(
+        event_type: str,
+        data: Any,
+        experiment_id: str,
+    ) -> None:
+        try:
+            from db.connection import get_pool
+            from db.repositories.event_repo import insert_event
+            await insert_event(
+                get_pool(),
+                session_id=None,
+                experiment_id=experiment_id,
+                event_type=event_type,
+                data=data,
+            )
+        except Exception as exc:
+            print(
+                f"[Logger] Admin event insert failed for '{event_type}': {exc}",
                 file=sys.stderr,
             )
 

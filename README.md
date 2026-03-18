@@ -182,6 +182,8 @@ The wizard walks you through six steps. Once an experiment is saved, its configu
 
 Select a provider and model for each of the three STAGE roles. Available providers depend on which API keys are set in your `.env`. Each role has a **Test** button to verify the connection before proceeding.
 
+A **local** provider is also available for connecting to any OpenAI-compatible server running on your machine (e.g. [LM Studio](https://lmstudio.ai/), [Ollama](https://ollama.com/), or a local [vLLM](https://docs.vllm.ai/) instance). Set `LOCAL_LLM_BASE_URL` in your `.env` (defaults to `http://127.0.0.1:1234/v1`) and select "local" as the provider in the wizard. No API key is required unless your server expects one (`LOCAL_LLM_API_KEY`).
+
 | Role | Responsibility | Model guidance |
 |------|----------------|----------------|
 | **Director** | Decides who speaks, selects the action type, and writes the structured instruction. | Needs strong instruction-following and reasoning (e.g. Claude Haiku, GPT-4o-mini). |

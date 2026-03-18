@@ -37,7 +37,6 @@ def _make_agent_manager(state=None) -> AgentManager:
     logger = MagicMock()
     logger.log_error = MagicMock()
     logger.log_event = MagicMock()
-    logger.log_message = MagicMock()
     return AgentManager(
         state=state,
         orchestrator=orchestrator,
@@ -153,7 +152,7 @@ class TestHandleMessage:
 
             await am._handle_message(result)
 
-            am.logger.log_message.assert_called_once()
+            mock_msg_repo.insert_message.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_no_message_is_noop(self):

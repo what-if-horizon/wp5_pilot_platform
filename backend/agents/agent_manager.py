@@ -64,9 +64,6 @@ class AgentManager:
         except Exception as exc:
             self.logger.log_error("push_agent_message_window", str(exc))
 
-        # Log the message event (fire-and-forget to events table).
-        self.logger.log_message(message.to_dict())
-
         # Publish via Redis pub/sub — the subscriber loop in SimulationSession
         # will deliver this to the connected WebSocket.
         try:

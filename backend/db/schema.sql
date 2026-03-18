@@ -94,3 +94,19 @@ CREATE TABLE IF NOT EXISTS agent_blocks (
     blocked_by  TEXT        NOT NULL,
     PRIMARY KEY (session_id, agent_name)
 );
+
+-- Migration: make events.session_id nullable for admin/system events.
+DO $$ BEGIN
+    ALTER TABLE events ALTER COLUMN session_id DROP NOT NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+DO $$ BEGIN
+    ALTER TABLE events DROP CONSTRAINT IF EXISTS events_session_id_fkey;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- Additional indexes for common query patterns.
+CREATE INDEX IF NOT EXISTS idx_events_session_type
+    ON events(session_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_messages_session_reported
+    ON messages(session_id, reported) WHERE reported = TRUE;

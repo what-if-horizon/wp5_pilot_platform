@@ -16,9 +16,10 @@ if TYPE_CHECKING:
 class BaseFeature:
     """No-op feature — does nothing.  Subclass and override hooks."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, logger=None):
         """Receive the experimental_config dict for this treatment group."""
         self.config = config
+        self.logger = logger
 
     async def seed(self, state: SessionState, websocket_send: Callable) -> None:
         """Inject content at session start, before the clock loop launches.

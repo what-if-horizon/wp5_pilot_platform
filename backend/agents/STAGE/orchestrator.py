@@ -175,6 +175,9 @@ class Orchestrator:
         self._turns_since_evaluate: int = 0
         self._has_completed_first_interval: bool = False
 
+        # Turn counter for event logging.
+        self._turn_number: int = 0
+
         # Cached session-static system prompts.
         self._update_system_prompt = build_update_system_prompt(
             chatroom_context=chatroom_context,
@@ -193,11 +196,39 @@ class Orchestrator:
         """Map an anonymous label back to the real name."""
         return self._reverse_map.get(anon_name, anon_name)
 
+    def _log_turn_result(self, result: TurnResult) -> None:
+        """Log a structured turn_result event to the DB."""
+        self.logger.log_event("turn_result", {
+            "turn_number": self._turn_number,
+            "action_type": result.action_type,
+            "agent_name": result.agent_name,
+            "priority": result.priority,
+            "action_rationale": result.action_rationale,
+            "performer_rationale": result.performer_rationale,
+            "target_message_id": result.target_message_id,
+            "target_user": result.target_user,
+            "message_id": result.message.message_id if result.message else None,
+        })
+
+    def get_session_snapshot(self) -> dict:
+        """Return orchestrator state for end-of-session persistence."""
+        return {
+            "turn_number": self._turn_number,
+            "agent_profiles": self.agent_profiles,
+            "internal_validity_summary": self._internal_validity_summary,
+            "ecological_validity_summary": self._ecological_validity_summary,
+            "action_counts": self._action_counts,
+            "performer_counts": self._performer_counts,
+            "name_map": self._name_map,
+        }
+
     async def execute_turn(self, internal_validity_criteria: str) -> Optional[TurnResult]:
         """Run one full Update → Evaluate → Action → Performer → Moderator cycle.
 
         Returns a TurnResult on success, or None if the cycle fails.
         """
+        self._turn_number += 1
+
         # 1. Gather recent messages, then anonymize.
         #    Action and Evaluate use separate window sizes; Update and human
         #    detection use the Action window (which contains the most recent message).
@@ -273,13 +304,15 @@ class Orchestrator:
         if agent_name == self.state.user_name:
             self._turns_since_evaluate = _saved_counter
             self._has_completed_first_interval = _saved_first_interval
-            return TurnResult(
+            result = TurnResult(
                 action_type="wait",
                 agent_name=agent_name,
                 priority=priority,
                 performer_rationale=performer_rationale,
                 action_rationale=action_rationale,
             )
+            self._log_turn_result(result)
+            return result
 
         # Validate that the chosen agent exists; fall back to a random valid agent.
         if not agents:
@@ -317,18 +350,20 @@ class Orchestrator:
                     self._has_completed_first_interval = _saved_first_interval
                     self._last_agent = _saved_last_agent
                     self._last_action_type = _saved_last_action_type
-                    return TurnResult(
+                    result = TurnResult(
                         action_type="wait",
                         agent_name=agent_name,
                         priority=priority,
                         performer_rationale=performer_rationale,
                         action_rationale=action_rationale,
                     )
+                    self._log_turn_result(result)
+                    return result
 
             self._action_counts["like"] += 1
             anon_name = self._name_map.get(agent_name, agent_name)
             self._performer_counts[anon_name] = self._performer_counts.get(anon_name, 0) + 1
-            return TurnResult(
+            result = TurnResult(
                 action_type="like",
                 agent_name=agent_name,
                 target_message_id=target_message_id,
@@ -336,6 +371,8 @@ class Orchestrator:
                 performer_rationale=performer_rationale,
                 action_rationale=action_rationale,
             )
+            self._log_turn_result(result)
+            return result
 
         # 5. Performer → Moderator loop (max MAX_PERFORMER_RETRIES attempts)
         performer_instruction = action_data.get("performer_instruction", {})
@@ -455,13 +492,15 @@ class Orchestrator:
             self._has_completed_first_interval = _saved_first_interval
             self._last_agent = _saved_last_agent
             self._last_action_type = _saved_last_action_type
-            return TurnResult(
+            result = TurnResult(
                 action_type="wait",
                 agent_name=agent_name,
                 priority=priority,
                 performer_rationale=performer_rationale,
                 action_rationale=action_rationale,
             )
+            self._log_turn_result(result)
+            return result
 
         # 6. Deanonymize any anonymous labels in the generated content.
         content = deanonymize_text(content, self._reverse_map)
@@ -500,7 +539,7 @@ class Orchestrator:
         anon_name = self._name_map.get(agent_name, agent_name)
         self._performer_counts[anon_name] = self._performer_counts.get(anon_name, 0) + 1
 
-        return TurnResult(
+        result = TurnResult(
             action_type=action_type,
             agent_name=agent_name,
             message=message,
@@ -510,6 +549,8 @@ class Orchestrator:
             performer_rationale=performer_rationale,
             action_rationale=action_rationale,
         )
+        self._log_turn_result(result)
+        return result
 
     # ── Director Update (Call 1) ──────────────────────────────────────────────
 

@@ -36,7 +36,7 @@ _SCENARIO_COMPAT: dict[str, list[str]] = {
 AVAILABLE_FEATURES = sorted(_REGISTRY.keys())
 
 
-def load_features(experimental_config: dict) -> FeatureRunner:
+def load_features(experimental_config: dict, logger=None) -> FeatureRunner:
     """Build a FeatureRunner from the experimental config.
 
     Reads ``experimental_config["features"]`` (a list of feature names).
@@ -63,6 +63,6 @@ def load_features(experimental_config: dict) -> FeatureRunner:
                 f"Unknown feature '{name}'. "
                 f"Available: {', '.join(AVAILABLE_FEATURES)}"
             )
-        features.append(cls(experimental_config))
+        features.append(cls(experimental_config, logger=logger))
 
     return FeatureRunner(features)

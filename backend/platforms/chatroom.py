@@ -137,7 +137,7 @@ class SimulationSession:
             rng=self._rng,
         )
 
-        self.features = load_features(self.experimental_config)
+        self.features = load_features(self.experimental_config, logger=self.logger)
 
         # AgentManager uses publish_event (Redis) for delivery, not direct websocket.
         self.agent_manager = AgentManager(
@@ -208,6 +208,12 @@ class SimulationSession:
                 await self._subscriber_task
             except asyncio.CancelledError:
                 pass
+
+        try:
+            snapshot = self.agent_manager.orchestrator.get_session_snapshot()
+            self.logger.log_event("session_snapshot", snapshot)
+        except Exception as exc:
+            self.logger.log_error("session_snapshot", str(exc))
 
         self.logger.log_session_end(reason)
         # Flush any pending fire-and-forget log tasks before closing DB connection.
@@ -371,8 +377,6 @@ class SimulationSession:
             await redis_client.push_to_window(r, self.session_id, message.to_dict())
         except Exception as exc:
             self.logger.log_error("push_user_message_window", str(exc))
-
-        self.logger.log_message(message.to_dict())
 
         # Publish via Redis so the pub/sub loop delivers it to the WebSocket.
         try:

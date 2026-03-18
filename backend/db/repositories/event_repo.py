@@ -10,7 +10,7 @@ import asyncpg
 async def insert_event(
     pool: asyncpg.Pool,
     *,
-    session_id: str,
+    session_id: Optional[str] = None,
     experiment_id: str,
     event_type: str,
     data: Any,

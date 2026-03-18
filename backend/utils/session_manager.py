@@ -239,6 +239,14 @@ class SessionManager:
         # Resume the clock loop (but don't re-seed the scenario).
         await session.resume()
 
+        session.logger.log_event("session_reconstructed", {
+            "treatment_group": treatment_group,
+            "user_name": user_name,
+            "experiment_id": experiment_id,
+            "preloaded_messages": len(msg_rows),
+            "preloaded_blocks": len(block_rows),
+        })
+
         r = redis_client.get_redis()
         await redis_client.cache_session(r, session_id, {
             "treatment_group": treatment_group,

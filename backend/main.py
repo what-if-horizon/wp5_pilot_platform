@@ -20,6 +20,7 @@ load_dotenv()
 from platforms import SimulationSession
 from utils.session_manager import session_manager
 from utils import token_manager
+from utils.logger import Logger
 from utils.log_viewer import generate_html_from_lines
 from db import connection as db_conn
 from cache import redis_client
@@ -187,6 +188,12 @@ async def start_session(request: SessionStartRequest):
 
     group, experiment_id = result
 
+    Logger.log_admin_event("token_consumed", {
+        "token": request.token,
+        "treatment_group": group,
+        "session_id": session_id,
+    }, experiment_id=experiment_id)
+
     # Check experiment availability (date window + paused status).
     unavailable = await config_repo.check_experiment_availability(pool, experiment_id)
     if unavailable:
@@ -196,6 +203,11 @@ async def start_session(request: SessionStartRequest):
                 "UPDATE tokens SET used = FALSE, used_at = NULL, session_id = NULL WHERE token = $1",
                 request.token,
             )
+        Logger.log_admin_event("token_rollback", {
+            "token": request.token,
+            "reason": unavailable,
+            "experiment_id": experiment_id,
+        }, experiment_id=experiment_id)
         raise HTTPException(status_code=403, detail=unavailable)
 
     await session_manager.reserve_pending(
@@ -732,6 +744,11 @@ async def admin_save_config(body: dict, x_admin_key: str = Header(None)):
     # Activate this experiment.
     _experiment_id = new_experiment_id
 
+    Logger.log_admin_event("admin_config_save", {
+        "experiment_id": new_experiment_id,
+        "description": description,
+    }, experiment_id=new_experiment_id)
+
     return {"status": "saved", "experiment_id": new_experiment_id}
 
 
@@ -759,6 +776,9 @@ async def admin_pause_experiment(experiment_id: str, x_admin_key: str = Header(N
         await config_repo.set_paused(pool, experiment_id, True)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    Logger.log_admin_event("admin_pause", {
+        "experiment_id": experiment_id,
+    }, experiment_id=experiment_id)
     return {"status": "paused", "experiment_id": experiment_id}
 
 
@@ -771,6 +791,9 @@ async def admin_resume_experiment(experiment_id: str, x_admin_key: str = Header(
         await config_repo.set_paused(pool, experiment_id, False)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    Logger.log_admin_event("admin_resume", {
+        "experiment_id": experiment_id,
+    }, experiment_id=experiment_id)
     return {"status": "resumed", "experiment_id": experiment_id}
 
 
@@ -924,6 +947,11 @@ async def admin_reset_sessions(
     for sid in session_ids:
         await redis_client.invalidate_session(r, sid)
 
+    Logger.log_admin_event("admin_reset_sessions", {
+        "experiment_id": target_id,
+        "sessions_deleted": len(session_ids),
+    }, experiment_id=target_id)
+
     return {"status": "sessions_reset", "experiment_id": target_id, "sessions_deleted": len(session_ids)}
 
 
@@ -1003,6 +1031,10 @@ async def admin_reset_db(
     # Clear active experiment if it was the deleted one.
     if _experiment_id == target_id:
         _experiment_id = ""
+
+    Logger.log_admin_event("admin_reset_db", {
+        "experiment_id": target_id,
+    }, experiment_id=target_id)
 
     return {"status": "experiment_deleted", "experiment_id": target_id}
 

@@ -47,3 +47,11 @@ class NewsArticleSeed(BaseFeature):
         }
         state.add_message(message)
         await websocket_send(message.to_dict())
+
+        if self.logger:
+            self.logger.log_event("feature_seed", {
+                "feature": "news_article",
+                "message_id": message.message_id,
+                "headline": headline,
+                "source": source,
+            })
