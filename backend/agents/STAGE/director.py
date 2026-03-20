@@ -247,6 +247,31 @@ def build_action_system_prompt(chatroom_context: str = "") -> str:
     return prompt
 
 
+def format_skip_feedback(
+    skipped_performer: Optional[str] = None,
+    consecutive_skips: int = 0,
+) -> str:
+    """Format skip feedback for the Director Action prompt.
+
+    When a performer has declined to act one or more times in a row,
+    this produces a short note so the Director can factor it in.
+    The Director remains blinded to *why* the performer declined.
+    """
+    if not skipped_performer or consecutive_skips <= 0:
+        return ""
+
+    if consecutive_skips == 1:
+        return (
+            f"\n**Note:** You selected {skipped_performer} to act next last turn, "
+            f"but they decided not to post."
+        )
+    return (
+        f"\n**Note:** You selected {skipped_performer} to act next, "
+        f"but they have decided not to post {consecutive_skips} times in a row. "
+        f"You must not select this performer."
+    )
+
+
 def build_action_user_prompt(
     messages: List[Message],
     agent_profiles: Dict[str, str],
@@ -255,11 +280,14 @@ def build_action_user_prompt(
     chatroom_context: str = "",
     performer_counts: Optional[Dict[str, int]] = None,
     exclude_performer: Optional[str] = None,
+    skipped_performer: Optional[str] = None,
+    consecutive_skips: int = 0,
 ) -> str:
     """Build the Director Action user prompt with dynamic data."""
     chat_log = format_chat_log(messages)
     profiles_str = format_agent_profiles(agent_profiles)
     participation_summary = format_participation_summary(performer_counts, exclude_performer=exclude_performer) if performer_counts else "(No actions yet)"
+    skip_feedback = format_skip_feedback(skipped_performer, consecutive_skips)
 
     prompt = _render_prompt(_ACTION_TEMPLATE, "user")
     prompt = prompt.replace("{CHATROOM_CONTEXT}", chatroom_context)
@@ -267,6 +295,7 @@ def build_action_user_prompt(
     prompt = prompt.replace("{ECOLOGICAL_VALIDITY_SUMMARY}", ecological_validity_summary)
     prompt = prompt.replace("{AGENT_PROFILES}", profiles_str)
     prompt = prompt.replace("{PARTICIPATION_SUMMARY}", participation_summary)
+    prompt = prompt.replace("{SKIP_FEEDBACK}", skip_feedback)
     prompt = prompt.replace("{CHAT_LOG}", chat_log)
 
     return prompt

@@ -268,10 +268,10 @@ class SimulationSession:
                 self.logger.log_error("clock_loop", str(e))
                 print(f"Error in clock loop: {e}")
 
-    # Typing speed for realistic delay: ~7 chars/sec ≈ 80 WPM fast typer.
-    TYPING_CHARS_PER_SECOND = 7.0
+    # Typing speed for realistic delay: ~8.3 chars/sec ≈ 100 WPM fast typer.
+    TYPING_CHARS_PER_SECOND = 8.3
     TYPING_DELAY_MIN = 0.5   # minimum delay even for very short messages
-    TYPING_DELAY_MAX = 8.0   # cap so long messages don't stall too long
+    TYPING_DELAY_MAX = 6.0   # cap so long messages don't stall too long
 
     async def _guarded_turn(self) -> None:
         """Execute a single agent turn sequentially.

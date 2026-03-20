@@ -8,6 +8,9 @@ Each turn:
      — If the Director selects the human participant, the turn short-circuits
        here: Performer/Moderator are skipped, and the evaluate counter is
        not advanced (wait turns are not productive).
+     — Consecutive skips are tracked and fed back to the Director so it can
+       choose a different performer.  After 2+ skips, the prompt instructs the
+       Director that it must not select this performer.
   4. Performer: generate message from agent profile + O/M/D + target message
   5. Moderator: extract clean content (retry up to 3 times)
 
@@ -175,6 +178,13 @@ class Orchestrator:
         self._turns_since_evaluate: int = 0
         self._has_completed_first_interval: bool = False
 
+        # Track consecutive skips: when the Director picks a performer who
+        # declines to act (i.e. the human participant), we feed this back so
+        # the Director can choose someone else.  The Director remains blinded
+        # to *why* the performer declined.
+        self._consecutive_skips: int = 0
+        self._last_skipped_performer: Optional[str] = None  # anonymous label
+
         # Turn counter for event logging.
         self._turn_number: int = 0
 
@@ -240,9 +250,12 @@ class Orchestrator:
         # 1b. Detect if the human posted since the last orchestrator turn.
         #     If the most recent message is from the human, treat them as the
         #     last-acting performer so their profile gets updated too.
+        #     Also reset the skip counter — the previously-silent performer spoke.
         if anon_recent_action and anon_recent_action[-1].sender == self._anon_user:
             self._last_agent = self._anon_user
             self._last_action_type = "message"
+            self._consecutive_skips = 0
+            self._last_skipped_performer = None
 
         # 2. Director Update (skip on first turn — nothing to assess)
         if anon_recent_action and self._last_agent:
@@ -302,6 +315,9 @@ class Orchestrator:
         #     Skip Performer/Moderator and restore evaluate counter
         #     (wait turns are not productive turns).
         if agent_name == self.state.user_name:
+            anon_selected = self._name_map.get(agent_name, agent_name)
+            self._consecutive_skips += 1
+            self._last_skipped_performer = anon_selected
             self._turns_since_evaluate = _saved_counter
             self._has_completed_first_interval = _saved_first_interval
             result = TurnResult(
@@ -363,6 +379,8 @@ class Orchestrator:
             self._action_counts["like"] += 1
             anon_name = self._name_map.get(agent_name, agent_name)
             self._performer_counts[anon_name] = self._performer_counts.get(anon_name, 0) + 1
+            self._consecutive_skips = 0
+            self._last_skipped_performer = None
             result = TurnResult(
                 action_type="like",
                 agent_name=agent_name,
@@ -539,6 +557,10 @@ class Orchestrator:
         anon_name = self._name_map.get(agent_name, agent_name)
         self._performer_counts[anon_name] = self._performer_counts.get(anon_name, 0) + 1
 
+        # Successful agent action — reset skip counter.
+        self._consecutive_skips = 0
+        self._last_skipped_performer = None
+
         result = TurnResult(
             action_type=action_type,
             agent_name=agent_name,
@@ -689,6 +711,8 @@ class Orchestrator:
             chatroom_context=self.chatroom_context,
             performer_counts=self._performer_counts,
             exclude_performer=self._anon_user,
+            skipped_performer=self._last_skipped_performer,
+            consecutive_skips=self._consecutive_skips,
         )
 
         action_raw = None

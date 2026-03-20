@@ -32,6 +32,7 @@ Read the performer profiles and participation counts below. Which performer is b
 {AGENT_PROFILES}
 
 **Participation so far:** {PARTICIPATION_SUMMARY}
+{SKIP_FEEDBACK}
 {/USER}
 
 ### Step 3: Select an Action

@@ -515,6 +515,80 @@ class TestExecuteTurnWait:
         await orch.execute_turn("criteria_A")
         assert orch._last_agent == last_agent_before
 
+    @pytest.mark.asyncio
+    async def test_wait_increments_consecutive_skips(self):
+        """Each wait turn should increment the skip counter."""
+        state = _make_state()
+        orch, _ = _make_orchestrator(state=state)
+
+        anon_user = orch._name_map[state.user_name]
+        action_resp = _action_json(next_performer=anon_user, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp)
+
+        assert orch._consecutive_skips == 0
+        await orch.execute_turn("criteria_A")
+        assert orch._consecutive_skips == 1
+        assert orch._last_skipped_performer == anon_user
+
+        await orch.execute_turn("criteria_A")
+        assert orch._consecutive_skips == 2
+
+    @pytest.mark.asyncio
+    async def test_skip_counter_resets_on_human_post(self):
+        """When the human posts, the skip counter should reset."""
+        state = _make_state()
+        orch, _ = _make_orchestrator(state=state)
+
+        anon_user = orch._name_map[state.user_name]
+        anon_alice = orch._name_map["Alice"]
+
+        # Accumulate some skips.
+        action_resp_wait = _action_json(next_performer=anon_user, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp_wait)
+        await orch.execute_turn("criteria_A")
+        await orch.execute_turn("criteria_A")
+        assert orch._consecutive_skips == 2
+
+        # Human posts a message.
+        state.add_message(Message.create(sender="participant", content="I'm here"))
+
+        # Next turn: Director picks an agent — skip counter resets at step 1b.
+        action_resp_agent = _action_json(next_performer=anon_alice, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp_agent)
+        orch.performer_llm.generate_response = AsyncMock(return_value="Welcome!")
+        orch.moderator_llm.generate_response = AsyncMock(return_value="Welcome!")
+
+        result = await orch.execute_turn("criteria_A")
+        assert result.action_type == "message"
+        assert orch._consecutive_skips == 0
+        assert orch._last_skipped_performer is None
+
+    @pytest.mark.asyncio
+    async def test_skip_counter_resets_on_successful_agent_action(self):
+        """A successful agent message should reset the skip counter."""
+        state = _make_state()
+        orch, _ = _make_orchestrator(state=state)
+
+        anon_user = orch._name_map[state.user_name]
+        anon_alice = orch._name_map["Alice"]
+
+        # One wait.
+        action_resp_wait = _action_json(next_performer=anon_user, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp_wait)
+        await orch.execute_turn("criteria_A")
+        assert orch._consecutive_skips == 1
+
+        # Director picks an agent next.
+        action_resp_agent = _action_json(next_performer=anon_alice, action_type="message")
+        orch.director_llm.generate_response = AsyncMock(return_value=action_resp_agent)
+        orch.performer_llm.generate_response = AsyncMock(return_value="Hi")
+        orch.moderator_llm.generate_response = AsyncMock(return_value="Hi")
+
+        result = await orch.execute_turn("criteria_A")
+        assert result.action_type == "message"
+        assert orch._consecutive_skips == 0
+
+
 
 # ── execute_turn: error handling ─────────────────────────────────────────────
 

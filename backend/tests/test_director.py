@@ -8,6 +8,7 @@ from models.agent import Agent
 from agents.STAGE.director import (
     format_chat_log,
     format_agent_profiles,
+    format_skip_feedback,
     parse_update_response,
     parse_evaluate_response,
     parse_action_response,
@@ -82,6 +83,26 @@ class TestFormatAgentProfiles:
         result = format_agent_profiles(profiles)
         assert "**Performer 1**: Took a sceptical stance" in result
         assert "**Performer 2**: (This performer has not acted yet.)" in result
+
+
+# ── format_skip_feedback ──────────────────────────────────────────────────────
+
+class TestFormatSkipFeedback:
+    def test_no_skips_returns_empty(self):
+        assert format_skip_feedback(None, 0) == ""
+        assert format_skip_feedback("Performer 2", 0) == ""
+        assert format_skip_feedback(None, 3) == ""
+
+    def test_single_skip(self):
+        result = format_skip_feedback("Performer 2", 1)
+        assert "Performer 2" in result
+        assert "decided not to post" in result
+
+    def test_multiple_skips_forbids_selecting_performer(self):
+        result = format_skip_feedback("Performer 3", 4)
+        assert "Performer 3" in result
+        assert "4 times in a row" in result
+        assert "must not select" in result
 
 
 # ── parse_update_response — valid inputs ─────────────────────────────────────
